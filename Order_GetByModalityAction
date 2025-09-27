@@ -1,0 +1,65 @@
+public with sharing class Order_GetByModalityAction {
+
+    public class Request {
+        @InvocableVariable(label='Modality Filter (Optional)')
+        public String modalityName;
+    }
+
+    public class Response {
+        @InvocableVariable(label='Result')
+        public String result;
+    }
+
+    @InvocableMethod(label='Get Orders By Modality')
+    public static List<Response> run(List<Request> reqs) {
+        List<Response> results = new List<Response>();
+
+        for (Request r : reqs) {
+            Response res = new Response();
+            List<Realistic_OrderLine_Datacsv__dlm> rows;
+
+            // Apply filter if modality specified
+            if (String.isNotBlank(r.modalityName)) {
+                rows = [
+                    SELECT Modality__c, Quantity__c, Revenue__c
+                    FROM Realistic_OrderLine_Datacsv__dlm
+                    WHERE Modality__c = :r.modalityName
+                ];
+            } else {
+                rows = [
+                    SELECT Modality__c, Quantity__c, Revenue__c
+                    FROM Realistic_OrderLine_Datacsv__dlm
+                ];
+            }
+
+            if (rows.isEmpty()) {
+                res.result = (String.isNotBlank(r.modalityName))
+                    ? '❌ No orders found for modality ' + r.modalityName
+                    : '❌ No modality data found.';
+            } else {
+                // Rollup by Modality
+                Map<String, OrderDL_Util.Tot> totals = OrderDL_Util.rollup(rows, 'Modality');
+                res.result = OrderDL_Util.fmtRollupTable(totals, 'Modality Performance', 'Modality');
+            }
+
+            results.add(res);
+        }
+
+        return results;
+    }
+}
+
+// Test 1: All modalities rollup
+Order_GetByModalityAction.Request m1 = new Order_GetByModalityAction.Request();
+List<Order_GetByModalityAction.Response> resp1 =
+    Order_GetByModalityAction.run(new List<Order_GetByModalityAction.Request>{m1});
+System.debug('=== All Modality Performance ===');
+System.debug(resp1[0].result);
+
+// Test 2: Specific modality filter
+Order_GetByModalityAction.Request m2 = new Order_GetByModalityAction.Request();
+m2.modalityName = 'Ultrasound';
+List<Order_GetByModalityAction.Response> resp2 =
+    Order_GetByModalityAction.run(new List<Order_GetByModalityAction.Request>{m2});
+System.debug('=== Ultrasound Performance ===');
+System.debug(resp2[0].result);
