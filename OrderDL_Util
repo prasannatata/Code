@@ -11,7 +11,7 @@ public with sharing class OrderDL_Util {
     }
 
     // === Format single order "card" ===
-    public static String fmtOrderCard(Realistic_OrderLine_Datacsv__dll o) {
+    public static String fmtOrderCard(Realistic_OrderLine_Datacsv__dlm o) {
         List<String> lines = new List<String>{
             'Order Ref: ' + o.OrderRefNumber__c,
             'Status: ' + o.OrderStatus__c,
@@ -32,12 +32,12 @@ public with sharing class OrderDL_Util {
     }
 
     // === Format table of orders ===
-    public static String fmtOrdersTable(List<Realistic_OrderLine_Datacsv__dll> rows, String title) {
+    public static String fmtOrdersTable(List<Realistic_OrderLine_Datacsv__dlm> rows, String title) {
         String out = '## ' + title + '\n\n';
         out += 'OrderRef | Customer | Status | Modality | Vendor | Qty | Revenue \n';
         out += '--- | --- | --- | --- | --- | --- | --- \n';
 
-        for (Realistic_OrderLine_Datacsv__dll r : rows) {
+        for (Realistic_OrderLine_Datacsv__dlm r : rows) {
             out += r.OrderRefNumber__c + ' | ' +
                    r.CustomerName__c + ' | ' +
                    r.OrderStatus__c + ' | ' +
@@ -50,10 +50,10 @@ public with sharing class OrderDL_Util {
     }
 
     // === Rollup helper ===
-    public static Map<String, Tot> rollup(List<Realistic_OrderLine_Datacsv__dll> rows, String byField) {
+    public static Map<String, Tot> rollup(List<Realistic_OrderLine_Datacsv__dlm> rows, String byField) {
         Map<String, Tot> totals = new Map<String, Tot>();
 
-        for (Realistic_OrderLine_Datacsv__dll r : rows) {
+        for (Realistic_OrderLine_Datacsv__dlm r : rows) {
             String key;
             if (byField == 'Vendor') key = r.Vendor__c;
             else if (byField == 'Modality') key = r.Modality__c;
