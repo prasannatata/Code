@@ -1,0 +1,50 @@
+public with sharing class Order_CreateTasksFromResultsAction {
+
+    public class Request {
+        @InvocableVariable(label='Due Date')
+        public Date dueDate;
+
+        @InvocableVariable(label='Max Customers To Assign')
+        public Integer limitCount;
+    }
+
+    public class Response {
+        @InvocableVariable(label='Result')
+        public String result;
+    }
+
+    @InvocableMethod(label='Create Salesforce Tasks For Top Customers')
+    public static List<Response> run(List<Request> reqs) {
+        List<Response> results = new List<Response>();
+
+        for (Request r : reqs) {
+            Response res = new Response();
+
+            // Get top N customers by revenue
+            List<AggregateResult> topCustomers = [
+                SELECT CustomerName__c customer, SUM(Revenue__c) totalRev, MAX(SalesRep__c) rep
+                FROM Realistic_OrderLine_Datacsv__dlm
+                GROUP BY CustomerName__c
+                ORDER BY SUM(Revenue__c) DESC
+                LIMIT :r.limitCount
+            ];
+
+            List<Task> tasks = new List<Task>();
+            for (AggregateResult ar : topCustomers) {
+                Task t = new Task(
+                    Subject = 'Follow-up with top customer: ' + (String)ar.get('customer'),
+                    ActivityDate = r.dueDate,
+                    OwnerId = UserInfo.getUserId(), // fallback
+                    Description = 'Revenue: $' + String.valueOf(ar.get('totalRev')),
+                    WhatId = null // optional linking to Account if mapped
+                );
+                tasks.add(t);
+            }
+
+            insert tasks;
+            res.result = '✅ Created ' + tasks.size() + ' Salesforce Tasks for top customers.';
+            results.add(res);
+        }
+        return results;
+    }
+}
