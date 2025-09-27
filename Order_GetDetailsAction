@@ -1,13 +1,11 @@
 public with sharing class Order_GetDetailsAction {
 
     public class Request {
-        @InvocableVariable(label='Order Reference' required=true)
-        public String orderRef;
+        @InvocableVariable(label='Order Reference') public String orderRef;
     }
 
     public class Response {
-        @InvocableVariable(label='Result')
-        public String result;
+        @InvocableVariable(label='Result') public String result;
     }
 
     @InvocableMethod(label='Get Order Details')
@@ -18,20 +16,19 @@ public with sharing class Order_GetDetailsAction {
             Response res = new Response();
 
             if (String.isBlank(r.orderRef)) {
-                res.result = OrderDL_Util.invalidInputMsg('Order Reference');
+                res.result = '⚠️ Order reference is required.';
             } else {
-                List<Realistic_OrderLine_Datacsv__dlm> rows =
-                    [SELECT OrderRefNumber__c, CustomerName__c, CustomerID__c,
-                            ParentCustomerName__c, OrderStatus__c, Modality__c,
+                List<Realistic_OrderLine_Datacsv__dll> rows =
+                    [SELECT OrderRefNumber__c, CustomerName__c, OrderStatus__c, Modality__c,
                             Vendor__c, OEM__c, PartNumber__c, PartDescription__c,
                             Quantity__c, Revenue__c, SalesRep__c, Requestor__c,
-                            OrderCreateDate__c, OrderPODate__c
-                     FROM Realistic_OrderLine_Datacsv__dlm
+                            OrderCreateDate__c, OrderPODate__c, CustomerID__c, ParentCustomerName__c
+                     FROM Realistic_OrderLine_Datacsv__dll
                      WHERE OrderRefNumber__c = :r.orderRef
                      LIMIT 1];
 
                 if (rows.isEmpty()) {
-                    res.result = OrderDL_Util.noResultsMsg('order with reference ' + r.orderRef);
+                    res.result = '❌ No order found with reference ' + r.orderRef;
                 } else {
                     res.result = OrderDL_Util.fmtOrderCard(rows[0]);
                 }
@@ -41,18 +38,3 @@ public with sharing class Order_GetDetailsAction {
         return results;
     }
 }
-
-
-
-// Create request input
-Order_GetDetailsAction.Request req = new Order_GetDetailsAction.Request();
-req.orderRef = 'ORD-110'; // 🔹 Replace with a real OrderRefNumber__c in your org
-
-// Call the action
-List<Order_GetDetailsAction.Response> resList = Order_GetDetailsAction.run(new List<Order_GetDetailsAction.Request>{ req });
-
-// Debug results
-for (Order_GetDetailsAction.Response r : resList) {
-    System.debug('🔎 Order Details Response:\n' + r.result);
-}
-
