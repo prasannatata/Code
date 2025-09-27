@@ -71,8 +71,6 @@ public with sharing class Order_GetByCompositeFiltersAction {
         return results;
     }
 }
-
-
 List<Order_GetByCompositeFiltersAction.Request> reqs = new List<Order_GetByCompositeFiltersAction.Request>();
 
 Order_GetByCompositeFiltersAction.Request r = new Order_GetByCompositeFiltersAction.Request();
@@ -85,4 +83,5 @@ reqs.add(r);
 List<Order_GetByCompositeFiltersAction.Response> res = Order_GetByCompositeFiltersAction.run(reqs);
 
 System.debug('### Composite Filter Results ### ' + res[0].result);
+
 
