@@ -1,16 +1,16 @@
-public with sharing class Order_GetByCompositeFiltersAction {
+public with sharing class Order_GetByCompositeFilterAction {
 
     public class Request {
-        @InvocableVariable(label='Order Status (Optional)')
+        @InvocableVariable(label='Order Status (e.g., Pending)')
         public String status;
 
-        @InvocableVariable(label='PO Date Before (Optional)')
+        @InvocableVariable(label='PO Date Before (yyyy-MM-dd)')
         public Date poDateBefore;
 
-        @InvocableVariable(label='Requestor (Optional)')
+        @InvocableVariable(label='Requestor (optional)')
         public String requestor;
 
-        @InvocableVariable(label='OEM (Optional)')
+        @InvocableVariable(label='OEM (optional)')
         public String oemName;
     }
 
@@ -19,55 +19,71 @@ public with sharing class Order_GetByCompositeFiltersAction {
         public String result;
     }
 
-    @InvocableMethod(label='Get Orders With Composite Filters')
+    @InvocableMethod(label='Get Orders By Composite Filters')
     public static List<Response> run(List<Request> reqs) {
         List<Response> results = new List<Response>();
 
         for (Request r : reqs) {
             Response res = new Response();
-            String baseQuery =
-                'SELECT OrderRefNumber__c, CustomerName__c, OrderStatus__c, ' +
-                'Modality__c, Vendor__c, OEM__c, Requestor__c, OrderPODate__c, ' +
-                'Quantity__c, Revenue__c ' +
-                'FROM Realistic_OrderLine_Datacsv__dlm WHERE 1=1 ';
+
+            // --- Base Query ---
+            String baseQuery = 'SELECT OrderRefNumber__c, CustomerName__c, OrderStatus__c, ' +
+                               'OrderPODate__c, Requestor__c, OEM__c, Vendor__c, ' +
+                               'Modality__c, Quantity__c, Revenue__c ' +
+                               'FROM Realistic_OrderLine_Datacsv__dlm';
+
+            // --- Build WHERE filters dynamically ---
+            List<String> filters = new List<String>();
 
             if (!String.isBlank(r.status)) {
-                baseQuery += 'AND OrderStatus__c = :r.status ';
+                filters.add('OrderStatus__c = \'' + String.escapeSingleQuotes(r.status) + '\'');
             }
             if (r.poDateBefore != null) {
-                baseQuery += 'AND OrderPODate__c < :r.poDateBefore ';
+                filters.add('OrderPODate__c < ' + r.poDateBefore.formatGmt('yyyy-MM-dd'));
             }
             if (!String.isBlank(r.requestor)) {
-                baseQuery += 'AND Requestor__c = :r.requestor ';
+                filters.add('Requestor__c = \'' + String.escapeSingleQuotes(r.requestor) + '\'');
             }
             if (!String.isBlank(r.oemName)) {
-                baseQuery += 'AND OEM__c = :r.oemName ';
+                filters.add('OEM__c = \'' + String.escapeSingleQuotes(r.oemName) + '\'');
             }
 
+            if (!filters.isEmpty()) {
+                baseQuery += ' WHERE ' + String.join(filters, ' AND ');
+            }
+
+            // --- Run Query ---
             List<Realistic_OrderLine_Datacsv__dlm> rows = Database.query(baseQuery);
 
             if (rows.isEmpty()) {
-                res.result = '❌ No orders found with given filters.';
+                res.result = '❌ No matching orders found with given filters.';
             } else {
                 res.result = OrderDL_Util.fmtOrdersTable(rows, 'Filtered Orders');
             }
+
             results.add(res);
         }
+
         return results;
     }
 }
 
 
-// === Composite filter: Pending + PO Date < June 1 2025 ===
-List<Order_GetByCompositeFiltersAction.Request> compositeReq = new List<Order_GetByCompositeFiltersAction.Request>();
-Order_GetByCompositeFiltersAction.Request cf = new Order_GetByCompositeFiltersAction.Request();
-cf.status = 'Pending';
-cf.poDateBefore = Date.newInstance(2025, 6, 1);
-compositeReq.add(cf);
 
-List<Order_GetByCompositeFiltersAction.Response> compositeRes =
-    Order_GetByCompositeFiltersAction.run(compositeReq);
+// 1. Status + Date
+Order_GetByCompositeFilterAction.Request r1 = new Order_GetByCompositeFilterAction.Request();
+r1.status = 'Pending';
+r1.poDateBefore = Date.newInstance(2025, 6, 1);  // before June 2025
 
-System.debug('== Composite Filter Output ==');
-System.debug(compositeRes[0].result);
+List<Order_GetByCompositeFilterAction.Response> res1 =
+    Order_GetByCompositeFilterAction.run(new List<Order_GetByCompositeFilterAction.Request>{ r1 });
+System.debug('== Status + PO Date == ' + res1[0].result);
 
+// 2. Requestor + OEM
+Order_GetByCompositeFilterAction.Request r2 = new Order_GetByCompositeFilterAction.Request();
+r2.requestor = 'Jane Doe';
+r2.oemName = 'OEMY';
+
+List<Order_GetByCompositeFilterAction.Response> res2 =
+    Order_GetByCompositeFilterAction.run(new List<Order_GetByCompositeFilterAction.Request>{ r2 });
+System.debug('== Requestor + OEM == ' + res2[0].result);
