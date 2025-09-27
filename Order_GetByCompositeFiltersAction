@@ -1,0 +1,59 @@
+public with sharing class Order_GetByCompositeFiltersAction {
+
+    public class Request {
+        @InvocableVariable(label='Order Status (Optional)')
+        public String status;
+
+        @InvocableVariable(label='PO Date Before (Optional)')
+        public Date poDateBefore;
+
+        @InvocableVariable(label='Requestor (Optional)')
+        public String requestor;
+
+        @InvocableVariable(label='OEM (Optional)')
+        public String oemName;
+    }
+
+    public class Response {
+        @InvocableVariable(label='Result')
+        public String result;
+    }
+
+    @InvocableMethod(label='Get Orders With Composite Filters')
+    public static List<Response> run(List<Request> reqs) {
+        List<Response> results = new List<Response>();
+
+        for (Request r : reqs) {
+            Response res = new Response();
+            String baseQuery =
+                'SELECT OrderRefNumber__c, CustomerName__c, OrderStatus__c, ' +
+                'Modality__c, Vendor__c, OEM__c, Requestor__c, OrderPODate__c, ' +
+                'Quantity__c, Revenue__c ' +
+                'FROM Realistic_OrderLine_Datacsv__dlm WHERE 1=1 ';
+
+            if (!String.isBlank(r.status)) {
+                baseQuery += 'AND OrderStatus__c = :r.status ';
+            }
+            if (r.poDateBefore != null) {
+                baseQuery += 'AND OrderPODate__c < :r.poDateBefore ';
+            }
+            if (!String.isBlank(r.requestor)) {
+                baseQuery += 'AND Requestor__c = :r.requestor ';
+            }
+            if (!String.isBlank(r.oemName)) {
+                baseQuery += 'AND OEM__c = :r.oemName ';
+            }
+
+            List<Realistic_OrderLine_Datacsv__dlm> rows = Database.query(baseQuery);
+
+            if (rows.isEmpty()) {
+                res.result = '❌ No orders found with given filters.';
+            } else {
+                res.result = OrderDL_Util.fmtOrdersTable(rows, 'Filtered Orders');
+            }
+            results.add(res);
+        }
+        return results;
+    }
+}
+
