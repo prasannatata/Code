@@ -1,0 +1,43 @@
+public with sharing class Order_GetDetailsAction {
+
+    public class Request {
+        @InvocableVariable(label='Order Reference' required=true)
+        public String orderRef;
+    }
+
+    public class Response {
+        @InvocableVariable(label='Result')
+        public String result;
+    }
+
+    @InvocableMethod(label='Get Order Details')
+    public static List<Response> run(List<Request> reqs) {
+        List<Response> results = new List<Response>();
+
+        for (Request r : reqs) {
+            Response res = new Response();
+
+            if (String.isBlank(r.orderRef)) {
+                res.result = OrderDL_Util.invalidInputMsg('Order Reference');
+            } else {
+                List<Realistic_OrderLine_Datacsv__dlm> rows =
+                    [SELECT OrderRefNumber__c, CustomerName__c, CustomerID__c,
+                            ParentCustomerName__c, OrderStatus__c, Modality__c,
+                            Vendor__c, OEM__c, PartNumber__c, PartDescription__c,
+                            Quantity__c, Revenue__c, SalesRep__c, Requestor__c,
+                            OrderCreateDate__c, OrderPODate__c
+                     FROM Realistic_OrderLine_Datacsv__dlm
+                     WHERE OrderRefNumber__c = :r.orderRef
+                     LIMIT 1];
+
+                if (rows.isEmpty()) {
+                    res.result = OrderDL_Util.noResultsMsg('order with reference ' + r.orderRef);
+                } else {
+                    res.result = OrderDL_Util.fmtOrderCard(rows[0]);
+                }
+            }
+            results.add(res);
+        }
+        return results;
+    }
+}
