@@ -1,7 +1,7 @@
 public with sharing class Order_GetByOEMAction {
 
     public class Request {
-        @InvocableVariable(label='OEM Name (Optional)')
+        @InvocableVariable(label='OEM Name (optional)')
         public String oemName;
     }
 
@@ -17,17 +17,14 @@ public with sharing class Order_GetByOEMAction {
         for (Request r : reqs) {
             Response res = new Response();
 
-            // Base query
-            String baseQuery =
-                'SELECT OEM__c, CustomerName__c, Quantity__c, Revenue__c ' +
-                'FROM Realistic_OrderLine_Datacsv__dlm WHERE 1=1';
-
-            // Add optional OEM filter
+            // --- Build base query ---
+            String baseQuery = 'SELECT OEM__c, Quantity__c, Revenue__c ' +
+                               'FROM Realistic_OrderLine_Datacsv__dlm';
             if (!String.isBlank(r.oemName)) {
-                baseQuery += ' AND OEM__c = \'' + String.escapeSingleQuotes(r.oemName) + '\'';
+                baseQuery += ' WHERE OEM__c = :r.oemName';
             }
 
-            // Execute query
+            // --- Execute query ---
             List<Realistic_OrderLine_Datacsv__dlm> rows = Database.query(baseQuery);
 
             if (rows.isEmpty()) {
@@ -37,29 +34,29 @@ public with sharing class Order_GetByOEMAction {
                     res.result = '❌ No OEM data found.';
                 }
             } else {
+                // --- Aggregate rollup ---
                 Map<String, OrderDL_Util.Tot> totals = OrderDL_Util.rollup(rows, 'OEM');
                 res.result = OrderDL_Util.fmtRollupTable(totals, 'OEM Performance', 'OEM');
             }
 
             results.add(res);
         }
+
         return results;
     }
 }
 
-// === All OEMs rollup ===
-List<Order_GetByOEMAction.Request> reqsAll = new List<Order_GetByOEMAction.Request>();
-reqsAll.add(new Order_GetByOEMAction.Request());
-List<Order_GetByOEMAction.Response> resAll = Order_GetByOEMAction.run(reqsAll);
-System.debug('== OEM Rollup (All) ==');
-System.debug(resAll[0].result);
 
-// === Filter by specific OEM ===
-List<Order_GetByOEMAction.Request> reqsOne = new List<Order_GetByOEMAction.Request>();
+// Case 1: All OEMs
 Order_GetByOEMAction.Request r1 = new Order_GetByOEMAction.Request();
-r1.oemName = 'Siemens';
-reqsOne.add(r1);
+r1.oemName = null;
 
-List<Order_GetByOEMAction.Response> resOne = Order_GetByOEMAction.run(reqsOne);
-System.debug('== OEM Rollup (Siemens only) ==');
-System.debug(resOne[0].result);
+List<Order_GetByOEMAction.Response> res1 = Order_GetByOEMAction.run(new List<Order_GetByOEMAction.Request>{ r1 });
+System.debug('== All OEMs == ' + res1[0].result);
+
+// Case 2: Specific OEM
+Order_GetByOEMAction.Request r2 = new Order_GetByOEMAction.Request();
+r2.oemName = 'Siemens';
+
+List<Order_GetByOEMAction.Response> res2 = Order_GetByOEMAction.run(new List<Order_GetByOEMAction.Request>{ r2 });
+System.debug('== Siemens OEM == ' + res2[0].result);
