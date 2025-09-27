@@ -1,0 +1,59 @@
+public with sharing class Order_GetByStatusAction {
+
+    public class Request {
+        @InvocableVariable(label='Order Status')
+        public String status;
+    }
+
+    public class Response {
+        @InvocableVariable(label='Result')
+        public String result;
+    }
+
+    @InvocableMethod(label='Get Orders By Status')
+    public static List<Response> run(List<Request> reqs) {
+        List<Response> results = new List<Response>();
+
+        for (Request r : reqs) {
+            Response res = new Response();
+
+            if (String.isBlank(r.status)) {
+                res.result = '⚠️ Please provide a valid Order Status (e.g., Pending, Completed).';
+            } else {
+                List<Realistic_OrderLine_Datacsv__dlm> rows = [
+                    SELECT OrderRefNumber__c, CustomerName__c, OrderStatus__c,
+                           Modality__c, Vendor__c, Quantity__c, Revenue__c
+                    FROM Realistic_OrderLine_Datacsv__dlm
+                    WHERE OrderStatus__c = :r.status
+                    LIMIT 50
+                ];
+
+                if (rows.isEmpty()) {
+                    res.result = '❌ No orders found with status: ' + r.status;
+                } else {
+                    res.result = OrderDL_Util.fmtOrdersTable(
+                        rows,
+                        'Orders with Status: ' + r.status
+                    );
+                }
+            }
+
+            results.add(res);
+        }
+
+        return results;
+    }
+}
+
+
+
+List<Order_GetByStatusAction.Request> reqs = new List<Order_GetByStatusAction.Request>();
+
+Order_GetByStatusAction.Request r = new Order_GetByStatusAction.Request();
+r.status = 'Pending'; // 🔄 Change to 'Completed' or other valid status in your data
+reqs.add(r);
+
+List<Order_GetByStatusAction.Response> resp = Order_GetByStatusAction.run(reqs);
+
+System.debug('=== Orders By Status Output ===');
+System.debug(resp[0].result);
