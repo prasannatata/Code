@@ -38,3 +38,13 @@ public with sharing class Order_GetDetailsAction {
         return results;
     }
 }
+
+
+Order_GetDetailsAction.Request req = new Order_GetDetailsAction.Request();
+req.orderRef = 'ORD-110'; // Must exist in your DLO
+
+List<Order_GetDetailsAction.Response> resList =
+    Order_GetDetailsAction.run(new List<Order_GetDetailsAction.Request>{ req });
+
+System.debug(resList[0].result);
+
