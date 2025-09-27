@@ -1,6 +1,6 @@
 public with sharing class Order_GetByCompositeFiltersAction {
 
-    // --- Request wrapper ---
+    // ====== REQUEST ======
     public class Request {
         @InvocableVariable(label='Order Status')
         public String status;
@@ -15,36 +15,36 @@ public with sharing class Order_GetByCompositeFiltersAction {
         public String oemName;
     }
 
-    // --- Response wrapper ---
+    // ====== RESPONSE ======
     public class Response {
         @InvocableVariable(label='Result')
         public String result;
     }
 
-    // --- Main method ---
-    @InvocableMethod(label='Get Orders By Composite Filters')
+    // ====== MAIN METHOD ======
+    @InvocableMethod(label='Get Orders by Composite Filters')
     public static List<Response> run(List<Request> reqs) {
         List<Response> results = new List<Response>();
 
         for (Request r : reqs) {
             Response res = new Response();
 
-            // --- Base Query ---
+            // ---- Base Query ----
             String baseQuery = 
-                'SELECT OrderRefNumber__c, OrderStatus__c, CustomerName__c, ' +
-                'ParentCustomerName__c, Vendor__c, Modality__c, OEM__c, ' +
-                'Quantity__c, Revenue__c, OrderCreateDate__c, OrderPODate__c, ' +
-                'Requestor__c ' +
+                'SELECT OrderRefNumber__c, CustomerName__c, ParentCustomerName__c, ' +
+                'OrderStatus__c, OEM__c, Vendor__c, Modality__c, Quantity__c, Revenue__c, ' +
+                'OrderCreateDate__c, OrderPODate__c, Requestor__c ' +
                 'FROM Realistic_OrderLine_Datacsv__dlm';
 
+            // ---- Dynamic Filters ----
             List<String> filters = new List<String>();
 
             if (!String.isBlank(r.status)) {
                 filters.add('OrderStatus__c = \'' + String.escapeSingleQuotes(r.status) + '\'');
             }
             if (r.poDateBefore != null) {
-                // ✅ FIXED: Date handling
-                filters.add('OrderPODate__c < ' + r.poDateBefore.format('yyyy-MM-dd'));
+                // ✅ FIXED: Correct Date formatting for SOQL
+                filters.add('OrderPODate__c < ' + '\'' + r.poDateBefore.format() + '\'');
             }
             if (!String.isBlank(r.requestor)) {
                 filters.add('Requestor__c = \'' + String.escapeSingleQuotes(r.requestor) + '\'');
@@ -53,13 +53,15 @@ public with sharing class Order_GetByCompositeFiltersAction {
                 filters.add('OEM__c = \'' + String.escapeSingleQuotes(r.oemName) + '\'');
             }
 
+            // ---- Append WHERE ----
             if (!filters.isEmpty()) {
                 baseQuery += ' WHERE ' + String.join(filters, ' AND ');
             }
 
-            // --- Run Query ---
+            // ---- Execute Query ----
             List<Realistic_OrderLine_Datacsv__dlm> rows = Database.query(baseQuery);
 
+            // ---- Handle Results ----
             if (rows.isEmpty()) {
                 res.result = '❌ No matching orders found with given filters.';
             } else {
@@ -68,20 +70,23 @@ public with sharing class Order_GetByCompositeFiltersAction {
 
             results.add(res);
         }
+
         return results;
     }
 }
+
 List<Order_GetByCompositeFiltersAction.Request> reqs = new List<Order_GetByCompositeFiltersAction.Request>();
 
 Order_GetByCompositeFiltersAction.Request r = new Order_GetByCompositeFiltersAction.Request();
 r.status = 'Pending';
-r.poDateBefore = Date.newInstance(2025, 6, 1);
+r.poDateBefore = Date.newInstance(2025, 6, 1); // Example: before June 2025
 r.requestor = 'Jane Doe';
 r.oemName = 'OEMY';
+
 reqs.add(r);
 
-List<Order_GetByCompositeFiltersAction.Response> res = Order_GetByCompositeFiltersAction.run(reqs);
+List<Order_GetByCompositeFiltersAction.Response> res =
+    Order_GetByCompositeFiltersAction.run(reqs);
 
-System.debug('### Composite Filter Results ### ' + res[0].result);
-
+System.debug('### Composite Filter Output: ' + res[0].result);
 
