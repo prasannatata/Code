@@ -21,7 +21,7 @@ public with sharing class Order_GetByOEMAction {
             String baseQuery = 'SELECT OEM__c, Quantity__c, Revenue__c ' +
                                'FROM Realistic_OrderLine_Datacsv__dlm';
             if (!String.isBlank(r.oemName)) {
-                baseQuery += ' WHERE OEM__c = :r.oemName';
+                baseQuery += ' WHERE OEM__c = \'' + String.escapeSingleQuotes(r.oemName) + '\'';
             }
 
             // --- Execute query ---
@@ -60,3 +60,4 @@ r2.oemName = 'Siemens';
 
 List<Order_GetByOEMAction.Response> res2 = Order_GetByOEMAction.run(new List<Order_GetByOEMAction.Request>{ r2 });
 System.debug('== Siemens OEM == ' + res2[0].result);
+
