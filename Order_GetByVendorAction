@@ -17,19 +17,23 @@ public with sharing class Order_GetByVendorAction {
         for (Request r : reqs) {
             Response res = new Response();
 
-            // Build query
-            String baseQuery = 
-                'SELECT Vendor__c, Quantity__c, Revenue__c ' +
-                'FROM Realistic_OrderLine_Datacsv__dlm';
-
-            if (r.vendorName != null && r.vendorName.trim() != '') {
-                baseQuery += ' WHERE Vendor__c = :r.vendorName';
+            // Query rows (handle vendor filter via SOQL concatenation)
+            List<Realistic_OrderLine_Datacsv__dlm> rows;
+            if (String.isNotBlank(r.vendorName)) {
+                rows = [
+                    SELECT Vendor__c, Quantity__c, Revenue__c
+                    FROM Realistic_OrderLine_Datacsv__dlm
+                    WHERE Vendor__c = :r.vendorName
+                ];
+            } else {
+                rows = [
+                    SELECT Vendor__c, Quantity__c, Revenue__c
+                    FROM Realistic_OrderLine_Datacsv__dlm
+                ];
             }
 
-            List<Realistic_OrderLine_Datacsv__dlm> rows = Database.query(baseQuery);
-
             if (rows.isEmpty()) {
-                res.result = (r.vendorName != null)
+                res.result = (String.isNotBlank(r.vendorName))
                     ? '❌ No orders found for vendor ' + r.vendorName
                     : '❌ No vendor data found.';
             } else {
@@ -43,25 +47,17 @@ public with sharing class Order_GetByVendorAction {
         return results;
     }
 }
-
-
-
-// 1. Get all vendors aggregated
-List<Order_GetByVendorAction.Request> reqs = new List<Order_GetByVendorAction.Request>();
+// Test 1: All vendors rollup
 Order_GetByVendorAction.Request r1 = new Order_GetByVendorAction.Request();
-reqs.add(r1);
-
-List<Order_GetByVendorAction.Response> resp = Order_GetByVendorAction.run(reqs);
-
+List<Order_GetByVendorAction.Response> resp1 = 
+    Order_GetByVendorAction.run(new List<Order_GetByVendorAction.Request>{r1});
 System.debug('=== All Vendor Performance ===');
-System.debug(resp[0].result);
+System.debug(resp1[0].result);
 
-// 2. Get a specific vendor (Siemens Healthineers)
+// Test 2: Specific vendor (Siemens Healthineers)
 Order_GetByVendorAction.Request r2 = new Order_GetByVendorAction.Request();
 r2.vendorName = 'Siemens Healthineers';
-List<Order_GetByVendorAction.Request> reqs2 = new List<Order_GetByVendorAction.Request>{r2};
-
-List<Order_GetByVendorAction.Response> resp2 = Order_GetByVendorAction.run(reqs2);
-
+List<Order_GetByVendorAction.Response> resp2 = 
+    Order_GetByVendorAction.run(new List<Order_GetByVendorAction.Request>{r2});
 System.debug('=== Siemens Vendor Performance ===');
 System.debug(resp2[0].result);
