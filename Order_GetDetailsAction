@@ -41,3 +41,18 @@ public with sharing class Order_GetDetailsAction {
         return results;
     }
 }
+
+
+
+// Create request input
+Order_GetDetailsAction.Request req = new Order_GetDetailsAction.Request();
+req.orderRef = 'ORD-110'; // 🔹 Replace with a real OrderRefNumber__c in your org
+
+// Call the action
+List<Order_GetDetailsAction.Response> resList = Order_GetDetailsAction.run(new List<Order_GetDetailsAction.Request>{ req });
+
+// Debug results
+for (Order_GetDetailsAction.Response r : resList) {
+    System.debug('🔎 Order Details Response:\n' + r.result);
+}
+
