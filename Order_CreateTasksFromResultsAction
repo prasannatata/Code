@@ -48,3 +48,15 @@ public with sharing class Order_CreateTasksFromResultsAction {
         return results;
     }
 }
+
+// === Task creation for top 3 customers due tomorrow ===
+List<Order_CreateTasksFromResultsAction.Request> taskReqs = new List<Order_CreateTasksFromResultsAction.Request>();
+Order_CreateTasksFromResultsAction.Request tr = new Order_CreateTasksFromResultsAction.Request();
+tr.dueDate = Date.today().addDays(1);
+tr.limitCount = 3;
+taskReqs.add(tr);
+
+List<Order_CreateTasksFromResultsAction.Response> taskRes =
+    Order_CreateTasksFromResultsAction.run(taskReqs);
+
+System.debug(taskRes[0].result);
