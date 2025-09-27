@@ -1,0 +1,67 @@
+public with sharing class Order_GetByVendorAction {
+
+    public class Request {
+        @InvocableVariable(label='Vendor Filter (Optional)')
+        public String vendorName;
+    }
+
+    public class Response {
+        @InvocableVariable(label='Result')
+        public String result;
+    }
+
+    @InvocableMethod(label='Get Orders By Vendor')
+    public static List<Response> run(List<Request> reqs) {
+        List<Response> results = new List<Response>();
+
+        for (Request r : reqs) {
+            Response res = new Response();
+
+            // Build query
+            String baseQuery = 
+                'SELECT Vendor__c, Quantity__c, Revenue__c ' +
+                'FROM Realistic_OrderLine_Datacsv__dlm';
+
+            if (r.vendorName != null && r.vendorName.trim() != '') {
+                baseQuery += ' WHERE Vendor__c = :r.vendorName';
+            }
+
+            List<Realistic_OrderLine_Datacsv__dlm> rows = Database.query(baseQuery);
+
+            if (rows.isEmpty()) {
+                res.result = (r.vendorName != null)
+                    ? '❌ No orders found for vendor ' + r.vendorName
+                    : '❌ No vendor data found.';
+            } else {
+                Map<String, OrderDL_Util.Tot> totals = OrderDL_Util.rollup(rows, 'Vendor');
+                res.result = OrderDL_Util.fmtRollupTable(totals, 'Vendor Performance', 'Vendor');
+            }
+
+            results.add(res);
+        }
+
+        return results;
+    }
+}
+
+
+
+// 1. Get all vendors aggregated
+List<Order_GetByVendorAction.Request> reqs = new List<Order_GetByVendorAction.Request>();
+Order_GetByVendorAction.Request r1 = new Order_GetByVendorAction.Request();
+reqs.add(r1);
+
+List<Order_GetByVendorAction.Response> resp = Order_GetByVendorAction.run(reqs);
+
+System.debug('=== All Vendor Performance ===');
+System.debug(resp[0].result);
+
+// 2. Get a specific vendor (Siemens Healthineers)
+Order_GetByVendorAction.Request r2 = new Order_GetByVendorAction.Request();
+r2.vendorName = 'Siemens Healthineers';
+List<Order_GetByVendorAction.Request> reqs2 = new List<Order_GetByVendorAction.Request>{r2};
+
+List<Order_GetByVendorAction.Response> resp2 = Order_GetByVendorAction.run(reqs2);
+
+System.debug('=== Siemens Vendor Performance ===');
+System.debug(resp2[0].result);
