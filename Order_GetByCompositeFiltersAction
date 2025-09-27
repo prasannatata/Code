@@ -57,3 +57,17 @@ public with sharing class Order_GetByCompositeFiltersAction {
     }
 }
 
+
+// === Composite filter: Pending + PO Date < June 1 2025 ===
+List<Order_GetByCompositeFiltersAction.Request> compositeReq = new List<Order_GetByCompositeFiltersAction.Request>();
+Order_GetByCompositeFiltersAction.Request cf = new Order_GetByCompositeFiltersAction.Request();
+cf.status = 'Pending';
+cf.poDateBefore = Date.newInstance(2025, 6, 1);
+compositeReq.add(cf);
+
+List<Order_GetByCompositeFiltersAction.Response> compositeRes =
+    Order_GetByCompositeFiltersAction.run(compositeReq);
+
+System.debug('== Composite Filter Output ==');
+System.debug(compositeRes[0].result);
+
