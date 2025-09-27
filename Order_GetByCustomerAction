@@ -1,0 +1,85 @@
+public with sharing class Order_GetByCustomerAction {
+
+    public class Request {
+        @InvocableVariable(label='Customer Filter (Optional)')
+        public String customerName;
+
+        @InvocableVariable(label='Parent Customer Filter (Optional)')
+        public String parentCustomerName;
+    }
+
+    public class Response {
+        @InvocableVariable(label='Result')
+        public String result;
+    }
+
+    @InvocableMethod(label='Get Orders By Customer')
+    public static List<Response> run(List<Request> reqs) {
+        List<Response> results = new List<Response>();
+
+        for (Request r : reqs) {
+            Response res = new Response();
+            List<Realistic_OrderLine_Datacsv__dlm> rows;
+
+            // Apply filter if customer or parent customer specified
+            if (String.isNotBlank(r.customerName)) {
+                rows = [
+                    SELECT CustomerName__c, ParentCustomerName__c, Quantity__c, Revenue__c
+                    FROM Realistic_OrderLine_Datacsv__dlm
+                    WHERE CustomerName__c = :r.customerName
+                ];
+            } else if (String.isNotBlank(r.parentCustomerName)) {
+                rows = [
+                    SELECT CustomerName__c, ParentCustomerName__c, Quantity__c, Revenue__c
+                    FROM Realistic_OrderLine_Datacsv__dlm
+                    WHERE ParentCustomerName__c = :r.parentCustomerName
+                ];
+            } else {
+                rows = [
+                    SELECT CustomerName__c, ParentCustomerName__c, Quantity__c, Revenue__c
+                    FROM Realistic_OrderLine_Datacsv__dlm
+                ];
+            }
+
+            if (rows.isEmpty()) {
+                res.result = (String.isNotBlank(r.customerName))
+                    ? '❌ No orders found for customer ' + r.customerName
+                    : (String.isNotBlank(r.parentCustomerName))
+                        ? '❌ No orders found for parent customer ' + r.parentCustomerName
+                        : '❌ No customer data found.';
+            } else {
+                // Default rollup by Customer Name
+                Map<String, OrderDL_Util.Tot> totals = OrderDL_Util.rollup(rows, 'Customer');
+                res.result = OrderDL_Util.fmtRollupTable(totals, 'Customer Revenue', 'Customer');
+            }
+
+            results.add(res);
+        }
+
+        return results;
+    }
+}
+
+
+// Test 1: All customers rollup
+Order_GetByCustomerAction.Request r1 = new Order_GetByCustomerAction.Request();
+List<Order_GetByCustomerAction.Response> resp1 = 
+    Order_GetByCustomerAction.run(new List<Order_GetByCustomerAction.Request>{r1});
+System.debug('=== All Customer Revenue ===');
+System.debug(resp1[0].result);
+
+// Test 2: Specific customer filter
+Order_GetByCustomerAction.Request r2 = new Order_GetByCustomerAction.Request();
+r2.customerName = 'Johns Hopkins';
+List<Order_GetByCustomerAction.Response> resp2 = 
+    Order_GetByCustomerAction.run(new List<Order_GetByCustomerAction.Request>{r2});
+System.debug('=== Johns Hopkins Revenue ===');
+System.debug(resp2[0].result);
+
+// Test 3: Parent Customer filter
+Order_GetByCustomerAction.Request r3 = new Order_GetByCustomerAction.Request();
+r3.parentCustomerName = 'Ascension Health';
+List<Order_GetByCustomerAction.Response> resp3 = 
+    Order_GetByCustomerAction.run(new List<Order_GetByCustomerAction.Request>{r3});
+System.debug('=== Ascension Health Parent Revenue ===');
+System.debug(resp3[0].result);
