@@ -1,0 +1,106 @@
+public with sharing class OrderDL_Util {
+
+    // === Helper DTO for Rollups ===
+    public class Tot {
+        public Integer count {get; set;}
+        public Decimal revenue {get; set;}
+        public Tot() {
+            count = 0;
+            revenue = 0;
+        }
+    }
+
+    // === Guardrails ===
+    public static String noResultsMsg(String context) {
+        return '❌ No ' + context + ' found for your query.\n\n📊 Source: Realistic_OrderLine_Data (last sync)';
+    }
+
+    public static String invalidInputMsg(String field) {
+        return '⚠️ Missing or invalid input: ' + field + '\n\n📊 Source: Realistic_OrderLine_Data (last sync)';
+    }
+
+    // === Footer helper ===
+    private static String footer() {
+        return '\n\n📊 Source: Realistic_OrderLine_Data (last sync)';
+    }
+
+    // === Format single order "card" ===
+    public static String fmtOrderCard(Realistic_OrderLine_Datacsv__dlm o) {
+        List<String> lines = new List<String>{
+            '### Order Details',
+            'Order Ref: ' + o.OrderRefNumber__c,
+            'Status: ' + o.OrderStatus__c,
+            'Customer: ' + o.CustomerName__c + ' (' + o.CustomerID__c + ')',
+            'Parent Customer: ' + o.ParentCustomerName__c,
+            'Vendor: ' + o.Vendor__c,
+            'Modality: ' + o.Modality__c,
+            'OEM: ' + o.OEM__c,
+            'Part: ' + o.PartNumber__c + ' – ' + o.PartDescription__c,
+            'Quantity: ' + String.valueOf(o.Quantity__c),
+            'Revenue: $' + String.valueOf(o.Revenue__c),
+            'Sales Rep: ' + o.SalesRep__c,
+            'Requestor: ' + o.Requestor__c,
+            'Created: ' + String.valueOf(o.OrderCreateDate__c) +
+                ' | PO Date: ' + String.valueOf(o.OrderPODate__c)
+        };
+        return String.join(lines, '\n') + footer();
+    }
+
+    // === Format table of orders ===
+    public static String fmtOrdersTable(List<Realistic_OrderLine_Datacsv__dlm> rows, String title) {
+        if (rows.isEmpty()) return noResultsMsg(title);
+
+        String out = '## ' + title + '\n\n';
+        out += 'OrderRef | Customer | Status | Modality | Vendor | Qty | Revenue \n';
+        out += '--- | --- | --- | --- | --- | --- | --- \n';
+
+        for (Realistic_OrderLine_Datacsv__dlm r : rows) {
+            out += r.OrderRefNumber__c + ' | ' +
+                   r.CustomerName__c + ' | ' +
+                   r.OrderStatus__c + ' | ' +
+                   r.Modality__c + ' | ' +
+                   r.Vendor__c + ' | ' +
+                   String.valueOf(r.Quantity__c) + ' | $' +
+                   String.valueOf(r.Revenue__c) + '\n';
+        }
+        return out + footer();
+    }
+
+    // === Rollup helper ===
+    public static Map<String, Tot> rollup(List<Realistic_OrderLine_Datacsv__dlm> rows, String byField) {
+        Map<String, Tot> totals = new Map<String, Tot>();
+
+        for (Realistic_OrderLine_Datacsv__dlm r : rows) {
+            String key;
+            if (byField == 'Vendor') key = r.Vendor__c;
+            else if (byField == 'Modality') key = r.Modality__c;
+            else if (byField == 'Customer') key = r.CustomerName__c;
+            else if (byField == 'OEM') key = r.OEM__c;
+            else key = 'Unknown';
+
+            if (!totals.containsKey(key)) {
+                totals.put(key, new Tot());
+            }
+
+            Tot t = totals.get(key);
+            t.count += (r.Quantity__c != null) ? Integer.valueOf(r.Quantity__c) : 0;
+            t.revenue += (r.Revenue__c != null) ? r.Revenue__c : 0;
+        }
+        return totals;
+    }
+
+    // === Format rollup as Markdown table ===
+    public static String fmtRollupTable(Map<String, Tot> totals, String title, String keyLabel) {
+        if (totals.isEmpty()) return noResultsMsg(title);
+
+        String out = '## ' + title + '\n\n';
+        out += keyLabel + ' | Total Quantity | Total Revenue \n';
+        out += '--- | --- | --- \n';
+
+        for (String k : totals.keySet()) {
+            Tot t = totals.get(k);
+            out += k + ' | ' + String.valueOf(t.count) + ' | $' + String.valueOf(t.revenue) + '\n';
+        }
+        return out + footer();
+    }
+}
