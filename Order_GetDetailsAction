@@ -1,11 +1,13 @@
 public with sharing class Order_GetDetailsAction {
 
     public class Request {
-        @InvocableVariable(label='Order Reference') public String orderRef;
+        @InvocableVariable(required=true label='Order Reference Number')
+        public String orderRef;
     }
 
     public class Response {
-        @InvocableVariable(label='Result') public String result;
+        @InvocableVariable(label='Order Details')
+        public String result;
     }
 
     @InvocableMethod(label='Get Order Details')
@@ -15,36 +17,50 @@ public with sharing class Order_GetDetailsAction {
         for (Request r : reqs) {
             Response res = new Response();
 
-            if (String.isBlank(r.orderRef)) {
-                res.result = '⚠️ Order reference is required.';
-            } else {
-                List<Realistic_OrderLine_Datacsv__dll> rows =
-                    [SELECT OrderRefNumber__c, CustomerName__c, OrderStatus__c, Modality__c,
-                            Vendor__c, OEM__c, PartNumber__c, PartDescription__c,
-                            Quantity__c, Revenue__c, SalesRep__c, Requestor__c,
-                            OrderCreateDate__c, OrderPODate__c, CustomerID__c, ParentCustomerName__c
-                     FROM Realistic_OrderLine_Datacsv__dll
-                     WHERE OrderRefNumber__c = :r.orderRef
-                     LIMIT 1];
+            try {
+                List<Realistic_OrderLine_Datacsv__dlm> rows = [
+                    SELECT OrderRefNumber__c, CustomerName__c, CustomerID__c,
+                           ParentCustomerName__c, ParentCustomerID__c,
+                           OrderStatus__c, OrderCreateDate__c, OrderPODate__c,
+                           Vendor__c, Modality__c, OEM__c,
+                           PartNumber__c, PartDescription__c,
+                           Quantity__c, Revenue__c,
+                           Requestor__c, SalesRep__c
+                    FROM Realistic_OrderLine_Datacsv__dlm
+                    WHERE OrderRefNumber__c = :r.orderRef
+                    LIMIT 1
+                ];
 
                 if (rows.isEmpty()) {
-                    res.result = '❌ No order found with reference ' + r.orderRef;
+                    res.result = '❌ No order found with reference: ' + r.orderRef;
                 } else {
                     res.result = OrderDL_Util.fmtOrderCard(rows[0]);
                 }
+
+            } catch (Exception e) {
+                res.result = '⚠️ Error while fetching order ' + r.orderRef + ': ' + e.getMessage();
             }
+
             results.add(res);
         }
+
         return results;
     }
 }
 
 
-Order_GetDetailsAction.Request req = new Order_GetDetailsAction.Request();
-req.orderRef = 'ORD-110'; // Must exist in your DLO
+List<Order_GetDetailsAction.Request> reqs = new List<Order_GetDetailsAction.Request>();
 
-List<Order_GetDetailsAction.Response> resList =
-    Order_GetDetailsAction.run(new List<Order_GetDetailsAction.Request>{ req });
+// Example: Fetch details for order ORD-1010
+Order_GetDetailsAction.Request r = new Order_GetDetailsAction.Request();
+r.orderRef = 'ORD-1010';
+reqs.add(r);
 
-System.debug(resList[0].result);
+// Call the action
+List<Order_GetDetailsAction.Response> results = Order_GetDetailsAction.run(reqs);
+
+// Debug output
+for (Order_GetDetailsAction.Response res : results) {
+    System.debug('Order Details Output:\n' + res.result);
+}
 
