@@ -43,3 +43,8 @@ examples:
   - "Analyze CT vs Ultrasound revenue"
   - "Summarize overall sales trends this year"
   - "Create tasks for customer IDs CUST-101, CUST-102 for rep 005xx00000123ABC due tomorrow"
+
+
+
+Handles conversational responses for Sales Data Analysis including orders, customers, vendors, modalities, quarterly revenue, and task creation.
+Returns results in a natural conversational style with summaries, formatted tables, explanations, and suggested follow-up actions. Guardrails ensure non-sales queries are redirected.”
