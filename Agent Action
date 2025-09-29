@@ -1,0 +1,97 @@
+Perfect 👌 — let’s make this clean and consistent for **all your Apex classes**. Below are **Agent Action Instructions** you can use in Agentforce for each Apex action, with **Input + Output instructions** written in the style Salesforce recommends (short, clear, conversational).
+
+---
+
+## 1. 🔹 **Get Order Details by Reference**
+
+* **Agent Action Instructions:**
+  `Fetch details of a specific order when a user provides an Order Reference Number.`
+
+* **Input (orderRef):**
+  `Provide the order reference number for the order to retrieve.`
+
+* **Output (result):**
+  `Formatted details of the order based on the given reference number.`
+
+---
+
+## 2. 🔹 **Get Orders by Status**
+
+* **Agent Action Instructions:**
+  `Retrieve all orders that match a specific status, such as Open, Closed, or Pending.`
+
+* **Input (status):**
+  `Enter the order status to filter by (e.g., Open, Closed, Pending).`
+
+* **Output (result):**
+  `List of orders filtered by the given status.`
+
+---
+
+## 3. 🔹 **Get Orders by Vendor**
+
+* **Agent Action Instructions:**
+  `Retrieve all orders associated with a specific vendor.`
+
+* **Input (vendorName):**
+  `Provide the vendor name to filter orders by.`
+
+* **Output (result):**
+  `List of orders associated with the given vendor.`
+
+---
+
+## 4. 🔹 **Get Orders by Modality**
+
+* **Agent Action Instructions:**
+  `Retrieve all orders that belong to a specific modality or category.`
+
+* **Input (modality):**
+  `Enter the modality name to filter by (e.g., Imaging, Lab, Surgical).`
+
+* **Output (result):**
+  `List of orders filtered by the selected modality.`
+
+---
+
+## 5. 🔹 **Get Orders by OEM**
+
+* **Agent Action Instructions:**
+  `Fetch orders that are associated with a specific Original Equipment Manufacturer (OEM).`
+
+* **Input (oemName):**
+  `Provide the OEM name to filter orders by.`
+
+* **Output (result):**
+  `List of orders filtered by the specified OEM.`
+
+---
+
+## 6. 🔹 **Get Orders by Composite Filters**
+
+*(Status + PO Date + Requestor + OEM — combined search)*
+
+* **Agent Action Instructions:**
+  `Retrieve orders that match multiple filters such as status, purchase order date, requestor, or OEM.`
+
+* **Inputs:**
+
+  * **status** → `Enter the order status to filter by (optional).`
+  * **poDateBefore** → `Enter a date to filter orders created before this PO date (optional).`
+  * **requestor** → `Provide the requestor name to filter by (optional).`
+  * **oemName** → `Provide the OEM name to filter by (optional).`
+
+* **Output (result):**
+  `List of orders filtered based on the given combination of criteria.`
+
+---
+
+✨ With this setup:
+
+* Each action is **self-explanatory** for the Agent.
+* Inputs guide the Agent what to collect from user.
+* Outputs clarify how the results should be shown in the conversation.
+
+---
+
+Would you like me to also prepare a **mapping table (Topic → Apex Class → Action Name → Instructions)** so you can directly upload/configure in Agent Builder without guessing which Apex class ties to which action?
