@@ -1,53 +1,33 @@
-public class Customer_TopRevenueAction {
-    public class Request {
-        @InvocableVariable
-        public Integer topN; // optional, defaults to 5
-    }
-
-    public class Response {
-        @InvocableVariable
-        public String result;
-    }
+public with sharing class Customer_TopRevenueAction {
+    public class Request { @InvocableVariable public Integer topN; }
+    public class Response { @InvocableVariable public String result; }
 
     @InvocableMethod
-    public static List<Response> run(List<Request> requests) {
+    public static List<Response> run(List<Request> reqs) {
         List<Response> results = new List<Response>();
+        for (Request r : reqs) {
+            Response res = new Response();
 
-        Integer limitVal = (requests.isEmpty() || requests[0].topN == null) ? 5 : requests[0].topN;
+            String query = 'SELECT ' + OrderDL_Util.BASE_FIELDS +
+                           ' FROM Realistic_OrderLine_Datacsv__dlm';
 
-        String query = 'SELECT CustomerName__c, SUM(Revenue__c) totalRevenue ' +
-                       'FROM Realistic_OrderLine_Datacsv__dlm ' +
-                       'GROUP BY CustomerName__c ' +
-                       'ORDER BY totalRevenue DESC ' +
-                       'LIMIT :limitVal';
+            List<Realistic_OrderLine_Datacsv__dlm> rows = Database.query(query);
+            Map<String, OrderDL_Util.Tot> totals = OrderDL_Util.rollup(rows, 'Customer');
 
-        List<AggregateResult> rows = Database.query(query);
+            List<String> sorted = new List<String>(totals.keySet());
+            sorted.sort((a, b) => totals.get(b).revenue.compareTo(totals.get(a).revenue));
 
-        Response res = new Response();
-        if (rows.isEmpty()) {
-            res.result = '❌ No customers found.';
-        } else {
-            String header = '## Top ' + limitVal + ' Customers by Revenue\n' +
-                            'Customer | Total Revenue\n' +
-                            '--- | ---\n';
-
-            String body = '';
-            for (AggregateResult ar : rows) {
-                body += (String) ar.get('CustomerName__c') + ' | $' + ar.get('totalRevenue') + '\n';
+            String out = '## Top Customers by Revenue\nCustomer | Orders | Qty | Revenue\n--- | --- | --- | ---\n';
+            Integer count = 0;
+            for (String c : sorted) {
+                if (count++ >= (r.topN == null ? 10 : r.topN)) break;
+                OrderDL_Util.Tot t = totals.get(c);
+                out += c + ' | ' + t.count + ' | ' + t.qty + ' | $' + t.revenue + '\n';
             }
-            res.result = header + body;
-        }
+            res.result = out;
 
-        results.add(res);
+            results.add(res);
+        }
         return results;
     }
 }
-+++++++++
-// Test top 5 customers by revenue
-List<Customer_TopRevenueAction.Request> reqs = new List<Customer_TopRevenueAction.Request>();
-Customer_TopRevenueAction.Request r = new Customer_TopRevenueAction.Request();
-r.topN = 5; // Optional, defaults to 5 if not set
-reqs.add(r);
-
-List<Customer_TopRevenueAction.Response> res = Customer_TopRevenueAction.run(reqs);
-System.debug('>>> Top Customers by Revenue: ' + res[0].result);
