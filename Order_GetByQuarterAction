@@ -28,3 +28,17 @@ public with sharing class Order_GetByQuarterAction {
         return results;
     }
 }
+
+
+
+// Test Q1 2025
+List<Order_GetByQuarterAction.Request> reqs = new List<Order_GetByQuarterAction.Request>();
+Order_GetByQuarterAction.Request r = new Order_GetByQuarterAction.Request();
+r.quarter = 1;   // Q1 = Jan–Mar
+r.year = 2025;
+reqs.add(r);
+
+List<Order_GetByQuarterAction.Response> res = Order_GetByQuarterAction.run(reqs);
+for (Order_GetByQuarterAction.Response rr : res) {
+    System.debug('RESULT => ' + rr.result);
+}
