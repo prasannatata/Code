@@ -1,0 +1,172 @@
+public with sharing class UniversalDataQuery {
+
+    // Request wrapper from Copilot
+    public class Request {
+        @InvocableVariable(required=true)
+        public String naturalLanguageQuery; // e.g. "Top 5 customers in Q1 2025"
+
+        @InvocableVariable
+        public String objectName; // e.g. 'Realistic_OrderLine_Datacsv__dlm'
+    }
+
+    // Response wrapper to Copilot
+    public class Result {
+        @InvocableVariable public String resultJson;
+        @InvocableVariable public String generatedSOQL;
+        @InvocableVariable public Boolean success;
+        @InvocableVariable public String errorMessage;
+    }
+
+    @InvocableMethod(label='Universal NL Query' description='Execute any natural language query')
+    public static List<Result> executeQuery(List<Request> requests) {
+        List<Result> results = new List<Result>();
+        Request req = requests[0];
+        Result res = new Result();
+
+        try {
+            // Step 1. Parse natural language query
+            QueryIntent intent = parseNaturalLanguage(req.naturalLanguageQuery);
+
+            // Step 2. Build SOQL
+            String soql = buildDynamicSOQL(intent, req.objectName);
+            res.generatedSOQL = soql;
+
+            // Step 3. Execute query
+            List<SObject> records = Database.query(soql);
+
+            // Step 4. Return JSON
+            res.resultJson = JSON.serializePretty(records);
+            res.success = true;
+
+        } catch (Exception e) {
+            res.success = false;
+            res.errorMessage = e.getMessage();
+        }
+
+        results.add(res);
+        return results;
+    }
+
+    // --- Query Intent Model ---
+    private class QueryIntent {
+        String analysisType;
+        List<String> fields = new List<String>();
+        List<String> aggregateFields = new List<String>();
+        List<String> conditions = new List<String>();
+        List<String> groupBy = new List<String>();
+        List<String> orderBy = new List<String>();
+        Integer limitValue = 0;
+    }
+
+    // --- Step 1: Parse NL Query ---
+    private static QueryIntent parseNaturalLanguage(String query) {
+        QueryIntent intent = new QueryIntent();
+
+        // Detect analysis type
+        if (query.toLowerCase().contains('drop')) {
+            intent.analysisType = 'TREND';
+        } else if (query.toLowerCase().contains('top')) {
+            intent.analysisType = 'AGGREGATION';
+        } else {
+            intent.analysisType = 'LIST';
+        }
+
+        // Extract fields
+        intent.fields = extractFields(query);
+
+        // Extract filters
+        intent.conditions = extractConditions(query);
+
+        // Grouping
+        intent.groupBy = extractGroupBy(query);
+
+        // Sorting
+        intent.orderBy = extractOrderBy(query);
+
+        // Top N
+        intent.limitValue = extractLimit(query);
+
+        return intent;
+    }
+
+    // --- Step 2: Build SOQL ---
+    private static String buildDynamicSOQL(QueryIntent intent, String objectName) {
+        String soql = 'SELECT ';
+
+        if (!intent.aggregateFields.isEmpty()) {
+            soql += String.join(intent.aggregateFields, ', ');
+        } else {
+            soql += String.join(intent.fields, ', ');
+        }
+
+        soql += ' FROM ' + objectName;
+
+        if (!intent.conditions.isEmpty()) {
+            soql += ' WHERE ' + String.join(intent.conditions, ' AND ');
+        }
+
+        if (!intent.groupBy.isEmpty()) {
+            soql += ' GROUP BY ' + String.join(intent.groupBy, ', ');
+        }
+
+        if (!intent.orderBy.isEmpty()) {
+            soql += ' ORDER BY ' + String.join(intent.orderBy, ', ');
+        }
+
+        if (intent.limitValue > 0) {
+            soql += ' LIMIT ' + intent.limitValue;
+        }
+
+        return soql;
+    }
+
+    // --- Helper Extractors ---
+    private static List<String> extractFields(String query) {
+        List<String> fields = new List<String>();
+
+        if (query.toLowerCase().contains('revenue')) fields.add('SUM(Revenue__c) totalRevenue');
+        if (query.toLowerCase().contains('quantity')) fields.add('SUM(Quantity__c) totalQuantity');
+        if (query.toLowerCase().contains('customer')) fields.add('CustomerName__c');
+        if (query.toLowerCase().contains('vendor')) fields.add('Vendor__c');
+        if (query.toLowerCase().contains('modality')) fields.add('Modality__c');
+
+        if (fields.isEmpty()) fields.add('Id'); // fallback
+        return fields;
+    }
+
+    private static List<String> extractConditions(String query) {
+        List<String> conditions = new List<String>();
+
+        if (query.toLowerCase().contains('q1 2025')) {
+            conditions.add('CALENDAR_QUARTER(OrderCreateDate__c) = 1');
+            conditions.add('CALENDAR_YEAR(OrderCreateDate__c) = 2025');
+        }
+        if (query.toLowerCase().contains('pending')) {
+            conditions.add('OrderStatus__c = \'Pending\'');
+        }
+
+        return conditions;
+    }
+
+    private static List<String> extractGroupBy(String query) {
+        List<String> groupBy = new List<String>();
+        if (query.toLowerCase().contains('by customer')) groupBy.add('CustomerName__c');
+        if (query.toLowerCase().contains('by vendor')) groupBy.add('Vendor__c');
+        if (query.toLowerCase().contains('by modality')) groupBy.add('Modality__c');
+        return groupBy;
+    }
+
+    private static List<String> extractOrderBy(String query) {
+        List<String> orderBy = new List<String>();
+        if (query.toLowerCase().contains('highest revenue')) orderBy.add('totalRevenue DESC');
+        if (query.toLowerCase().contains('highest quantity')) orderBy.add('totalQuantity DESC');
+        return orderBy;
+    }
+
+    private static Integer extractLimit(String query) {
+        Pattern p = Pattern.compile('top (\\d+)');
+        Matcher m = p.matcher(query.toLowerCase());
+        if (m.find()) return Integer.valueOf(m.group(1));
+        return 0;
+    }
+}
