@@ -1,127 +1,91 @@
 public with sharing class Customer_TopRevenueAction {
-
-    // Request wrapper
-    public class Request {
-        @InvocableVariable(label='Year') public Integer year;
-        @InvocableVariable(label='Quarter') public Integer quarter;
-        @InvocableVariable(label='Top N Customers') public Integer limitSize;
-    }
-
-    // Response wrapper
     public class Result {
-        @InvocableVariable public String heading;   // for ONE record only
         @InvocableVariable public String customer;
+        @InvocableVariable public String parentCustomer;
         @InvocableVariable public Integer orders;
         @InvocableVariable public Decimal revenue;
-
-        public Result(String heading, String cust, Integer ord, Decimal rev) {
-            this.heading  = heading;
-            this.customer = cust;
-            this.orders   = ord;
-            this.revenue  = rev;
-        }
+        @InvocableVariable public String heading;
     }
 
+    // No structured input → agent passes parameters dynamically
     @InvocableMethod(label='Get Top Customers by Revenue')
-    public static List<Result> run(List<Request> requests) {
-        List<Result> results = new List<Result>();
-        if (requests.isEmpty()) return results;
+    public static List<Result> run(List<String> inputs) {
+        List<Result> outputs = new List<Result>();
 
-        Request req = requests[0];
+        if (inputs == null || inputs.isEmpty()) return outputs;
 
-        // Defaults
-        Integer targetYear    = (req.year != null) ? req.year : Date.today().year();
-        Integer targetQuarter = req.quarter; 
-        Integer maxLimit      = (req.limitSize != null && req.limitSize > 0) ? req.limitSize : 5;
+        // Parse input (e.g. "year=2025,quarter=1,limit=5")
+        String raw = inputs[0];
+        Integer year = Date.today().year();
+        Integer quarter;
+        Integer limitSize = 10;
 
-        Date startDate;
-        Date endDate;
-
-        // Quarter-specific or full year
-        if (targetQuarter != null) {
-            if (targetQuarter == 1) {
-                startDate = Date.newInstance(targetYear, 1, 1);
-                endDate   = Date.newInstance(targetYear, 3, 31);
-            } else if (targetQuarter == 2) {
-                startDate = Date.newInstance(targetYear, 4, 1);
-                endDate   = Date.newInstance(targetYear, 6, 30);
-            } else if (targetQuarter == 3) {
-                startDate = Date.newInstance(targetYear, 7, 1);
-                endDate   = Date.newInstance(targetYear, 9, 30);
-            } else if (targetQuarter == 4) {
-                startDate = Date.newInstance(targetYear, 10, 1);
-                endDate   = Date.newInstance(targetYear, 12, 31);
-            }
-        } else {
-            startDate = Date.newInstance(targetYear, 1, 1);
-            endDate   = Date.newInstance(targetYear, 12, 31);
+        if (raw.contains('year=')) {
+            year = Integer.valueOf(raw.substringAfter('year=').substringBefore(',')); 
+        }
+        if (raw.contains('quarter=')) {
+            quarter = Integer.valueOf(raw.substringAfter('quarter=').substringBefore(',')); 
+        }
+        if (raw.contains('limit=')) {
+            limitSize = Integer.valueOf(raw.substringAfter('limit=').substringBefore(',')); 
         }
 
-        // Dynamic heading
-        String heading;
-        if (targetQuarter != null) {
-            heading = 'Top ' + maxLimit + ' customers in Q' + targetQuarter + ' ' + targetYear;
-        } else {
-            heading = 'Top ' + maxLimit + ' customers in Year ' + targetYear;
+        // Build query
+        String soql = 'SELECT CustomerName__c, ParentCustomerName__c, ' +
+                      'COUNT(Id) totalOrders, SUM(Revenue__c) totalRevenue ' +
+                      'FROM Realistic_OrderLine_Datacsv__dlm ' +
+                      'WHERE CALENDAR_YEAR(OrderCreateDate__c) = :year ';
+
+        if (quarter != null) {
+            soql += 'AND CALENDAR_QUARTER(OrderCreateDate__c) = :quarter ';
         }
 
-        // Query top N customers
-        List<AggregateResult> aggResults = [
-            SELECT CustomerName__c cust,
-                   COUNT(Id) orders,
-                   SUM(Revenue__c) totalRevenue
-            FROM Realistic_OrderLine_Datacsv__dlm
-            WHERE OrderCreateDate__c >= :startDate
-              AND OrderCreateDate__c <= :endDate
-            GROUP BY CustomerName__c
-            ORDER BY SUM(Revenue__c) DESC
-            LIMIT :maxLimit
-        ];
+        soql += 'GROUP BY CustomerName__c, ParentCustomerName__c ' +
+                'ORDER BY SUM(Revenue__c) DESC NULLS LAST ' +
+                'LIMIT :limitSize';
 
-        // Add heading only for the FIRST row
-        Boolean isFirst = true;
-        for (AggregateResult ar : aggResults) {
-            results.add(new Result(
-                isFirst ? heading : null,   // only first row has heading
-                (String)ar.get('cust'),
-                (Integer)ar.get('orders'),
-                (Decimal)ar.get('totalRevenue')
-            ));
-            isFirst = false;
+        List<AggregateResult> ars = Database.query(soql);
+
+        for (AggregateResult ar : ars) {
+            Result r = new Result();
+            r.customer = (String)ar.get('CustomerName__c');
+            r.parentCustomer = (String)ar.get('ParentCustomerName__c');
+            r.orders = (Integer)ar.get('totalOrders');
+            r.revenue = (Decimal)ar.get('totalRevenue');
+            r.heading = 'Top ' + limitSize + ' customers in ' +
+                        ((quarter != null) ? 'Q' + quarter + ' ' : 'Year ') + year;
+            outputs.add(r);
         }
 
-        return results;
+        return outputs;
     }
 }
 
 
+// Build input string in "year=YYYY,quarter=N,limit=M" format
+List<String> inputs = new List<String>();
+
+// Example 1: Top 5 customers in Q1 2025
+inputs.add('year=2025,quarter=1,limit=5');
+List<Customer_TopRevenueAction.Result> q1Results =
+    Customer_TopRevenueAction.run(inputs);
+System.debug('=== Top 5 Customers in Q1 2025 ===');
+System.debug(JSON.serializePretty(q1Results));
+
+// Example 2: Top 10 customers for full year 2025
+inputs.clear();
+inputs.add('year=2025,limit=10');
+List<Customer_TopRevenueAction.Result> yearResults =
+    Customer_TopRevenueAction.run(inputs);
+System.debug('=== Top 10 Customers in 2025 ===');
+System.debug(JSON.serializePretty(yearResults));
+
+// Example 3: Default (no quarter, no limit → will fallback to 10)
+inputs.clear();
+inputs.add('year=2024');
+List<Customer_TopRevenueAction.Result> defaultResults =
+    Customer_TopRevenueAction.run(inputs);
+System.debug('=== Default Top 10 Customers in 2024 ===');
+System.debug(JSON.serializePretty(defaultResults));
 
 
-// Example 1: Top 5 customers in current year
-List<Customer_TopRevenueAction.Request> reqs = new List<Customer_TopRevenueAction.Request>();
-Customer_TopRevenueAction.Request r = new Customer_TopRevenueAction.Request();
-r.year = Date.today().year();
-r.limitSize = 5;
-reqs.add(r);
-
-List<Customer_TopRevenueAction.Result> res = Customer_TopRevenueAction.run(reqs);
-System.debug(res);
-
-// Example 2: Top 3 customers in Q1 2025
-List<Customer_TopRevenueAction.Request> reqs = new List<Customer_TopRevenueAction.Request>();
-Customer_TopRevenueAction.Request r = new Customer_TopRevenueAction.Request();
-r.year = 2025;
-r.quarter = 1;
-r.limitSize = 3;
-reqs.add(r);
-
-List<Customer_TopRevenueAction.Result> res = Customer_TopRevenueAction.run(reqs);
-System.debug(res);
-
-// Example 3: Default year (current year), default top 5
-List<Customer_TopRevenueAction.Request> reqs = new List<Customer_TopRevenueAction.Request>();
-Customer_TopRevenueAction.Request r = new Customer_TopRevenueAction.Request();
-reqs.add(r);
-
-List<Customer_TopRevenueAction.Result> res = Customer_TopRevenueAction.run(reqs);
-System.debug(res);
