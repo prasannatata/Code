@@ -64,3 +64,72 @@ for (Order_GetDetailsAction.Response res : results) {
     System.debug('Order Details Output:\n' + res.result);
 }
 
++++++++++++++++++++++++++++++++++++++
+Perfect — you’re on the **Agent Action Configuration** screen. Here you’re wiring up your Apex Invocable class (`Order_GetDetailsAction`) with the Agentforce topic. Let’s fill these values properly:
+
+---
+
+### 1. **Agent Action Label**
+
+* Example: **Get Order Details**
+
+(Already set in your screenshot ✅)
+
+---
+
+### 2. **Agent Action Instructions**
+
+This is what tells the agent when to trigger this action.
+Keep it simple and aligned with user intent.
+
+👉 Example:
+`Use this action to fetch details of a specific order when a user provides an Order Reference Number.`
+
+---
+
+### 3. **Loading Text (optional)**
+
+What the user sees while the action is running.
+
+👉 Example:
+`Fetching order details...`
+
+---
+
+### 4. **Input Mapping** (this matches your Apex `Request` class variables)
+
+* **Order Reference Number**
+
+  * **API Name**: `orderRef` (must match your `@InvocableVariable` name)
+  * **Data Type**: `lightning__TextType`
+  * **Require Input**: ✅ (check this, since user must give orderRef)
+  * **Collect Data From User**: ✅ (so the bot asks “What’s the Order Reference Number?” if not provided)
+
+---
+
+### 5. **Output Mapping** (this matches your Apex `Response` class variables)
+
+* **Order Details**
+
+  * **API Name**: `result`
+  * **Data Type**: `lightning__TextType`
+  * **Show in Conversation**: ✅ (so the agent displays the formatted result)
+  * **Output Rendering**: `Text`
+
+---
+
+### ✅ Final Filled Example
+
+* **Label**: Get Order Details
+* **Instructions**: Use this action to fetch details of a specific order when a user provides an Order Reference Number.
+* **Input**: `orderRef` → Text → Require Input + Collect from User
+* **Output**: `result` → Text → Show in Conversation
+
+---
+
+🔹 After this, you’ll **Finish** and add this Action under the **Sales Data Analysis** topic.
+🔹 Repeat the same process for other Apex classes (`Order_GetByStatusAction`, `Order_GetByVendorAction`, etc.) with relevant instructions and input/output mappings.
+
+---
+
+👉 Do you want me to draft **all mappings for each Apex class** (Details, Status, Vendor, Modality, OEM, CompositeFilters) so you can directly configure them one by one?
