@@ -483,3 +483,138 @@ identify customers with falling revenue
 revenue drop from last quarter to this quarter
 customers who haven't reordered
 which accounts show declining spend?
+
+
+
+
+
+
+
+
+
+
+
+
+LWC ACTION UPdates 
+Great — you’re at the **Agent Action configuration** screen for your `Customer_RevenueDropOffAction`. Here’s exactly what you should enter for each field 👇
+
+---
+
+## 🔹 Agent Action Metadata
+
+**Agent Action Label**
+`Detect Revenue Drop-Off`
+
+**Agent Action Instructions**
+Analyzes customer revenue between two periods and identifies drop-offs. Returns customer names, revenues for both periods, drop amount, and drop percentage. Results are shown in a Lightning Data Table.
+
+**Show loading text for this action** ✅ (checked)
+
+**Loading Text**
+`Analyzing revenue trends and building your drop-off table…`
+
+---
+
+## 🔹 Inputs (from your Apex Request class)
+
+For each input, you’ll define instructions so the agent knows how to use them.
+
+1. **Period 1 Start Date (earlier period)**
+   *Instructions*: `Start date of the baseline (older) period for revenue comparison. Example: 2024-10-01 for Q4 2024.`
+   *Data Type*: `lightning__dateType`
+   Require input: ❌ (leave unchecked — dates can be auto-calculated)
+   Collect data from user: ❌
+
+2. **Period 1 End Date**
+   *Instructions*: `End date of the baseline (older) period. Example: 2024-12-31 for Q4 2024.`
+   *Data Type*: `lightning__dateType`
+   Require input: ❌
+   Collect data from user: ❌
+
+3. **Period 2 Start Date (later period)**
+   *Instructions*: `Start date of the comparison (newer) period. Example: 2025-01-01 for Q1 2025.`
+   *Data Type*: `lightning__dateType`
+   Require input: ❌
+   Collect data from user: ❌
+
+4. **Period 2 End Date**
+   *Instructions*: `End date of the comparison (newer) period. Example: 2025-03-31 for Q1 2025.`
+   *Data Type*: `lightning__dateType`
+   Require input: ❌
+   Collect data from user: ❌
+
+5. **Number of Top Customers**
+   *Instructions*: `How many customers to return, ranked by largest revenue drop. Default = 20.`
+   *Data Type*: `lightning__integerType`
+   Require input: ❌
+   Collect data from user: ❌
+
+---
+
+## 🔹 Outputs (from your Apex Response class)
+
+Here you’ll mostly map to your LWC, so most **“Show in conversation”** boxes stay **unchecked**.
+
+1. **Customer Names**
+   *Instructions*: `List of customer account names with revenue decline.`
+   *Data Type*: `lightning__listType`
+   Show in conversation: ❌
+
+2. **Period 1 Revenue**
+   *Instructions*: `List of revenues for each customer in Period 1.`
+   *Data Type*: `lightning__listType`
+   Show in conversation: ❌
+
+3. **Period 2 Revenue**
+   *Instructions*: `List of revenues for each customer in Period 2.`
+   *Data Type*: `lightning__listType`
+   Show in conversation: ❌
+
+4. **Drop Amount**
+   *Instructions*: `List of absolute revenue drops for each customer.`
+   *Data Type*: `lightning__listType`
+   Show in conversation: ❌
+
+5. **Drop Percentage**
+   *Instructions*: `List of percentage declines for each customer.`
+   *Data Type*: `lightning__listType`
+   Show in conversation: ❌
+
+6. **Period 1 Label**
+   *Instructions*: `Text label for baseline period (e.g., Q4 2024).`
+   *Data Type*: `lightning__textType`
+   Show in conversation: ❌
+
+7. **Period 2 Label**
+   *Instructions*: `Text label for comparison period (e.g., Q1 2025).`
+   *Data Type*: `lightning__textType`
+   Show in conversation: ❌
+
+8. **Summary Text**
+   *Instructions*: `High-level summary of results: number of customers with declines and total lost revenue.`
+   *Data Type*: `lightning__textType`
+   Show in conversation: ✅
+   Output Rendering: Text
+
+---
+
+## 🔹 Component Mapping (LWC)
+
+Add a **Component Output** → Select **`c:revenueDropOffTable`**
+Map properties:
+
+* `customerNames` → Customer Names
+* `period1Revenue` → Period 1 Revenue
+* `period2Revenue` → Period 2 Revenue
+* `dropAmount` → Drop Amount
+* `dropPercentage` → Drop Percentage
+* `period1Label` → Period 1 Label
+* `period2Label` → Period 2 Label
+* `summaryText` → Summary Text
+
+---
+
+✅ After this, your **Summary Text** will show conversationally, and the **LWC table** will render with all the detailed rows.
+
+Do you want me to also write the **exact loading text + sample response flow** (how the conversation will look to the end user) so you can test it quickly in Agentforce?
+
