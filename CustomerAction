@@ -1,0 +1,74 @@
+public with sharing class CustomerAction {
+
+    // Wrapper for request from Agent
+    public class Request {
+        @InvocableVariable public Map<String, String> filters; // dynamic filters
+        @InvocableVariable public Integer topN;               // optional, default 10
+    }
+
+    // Wrapper for response to Agent
+    public class Result {
+        @InvocableVariable public String summaryJson; // return structured JSON (Prompt Template will format it)
+    }
+
+    @InvocableMethod(label='Dynamic Customer Query')
+    public static List<Result> run(List<Request> requests) {
+        List<Result> outputs = new List<Result>();
+        if (requests.isEmpty()) return outputs;
+
+        Request req = requests[0];
+        Map<String, String> filters = (req.filters == null) ? new Map<String, String>() : req.filters;
+        Integer topN = (req.topN != null && req.topN > 0) ? req.topN : 10;
+
+        // --- Build base query ---
+        String baseQuery = 'SELECT CustomerName__c, COUNT(Id) totalOrders, ' +
+                           'SUM(Quantity__c) totalQty, SUM(Revenue__c) totalRevenue ' +
+                           'FROM Realistic_OrderLine_Datacsv__dlm WHERE Id != null ';
+
+        // --- Add filters dynamically ---
+        if (filters.containsKey('year')) {
+            baseQuery += ' AND CALENDAR_YEAR(OrderCreateDate__c) = ' + filters.get('year');
+        }
+        if (filters.containsKey('quarter')) {
+            baseQuery += ' AND CALENDAR_QUARTER(OrderCreateDate__c) = ' + filters.get('quarter');
+        }
+        if (filters.containsKey('customerName')) {
+            baseQuery += ' AND CustomerName__c = \'' + String.escapeSingleQuotes(filters.get('customerName')) + '\'';
+        }
+        if (filters.containsKey('orderStatus')) {
+            baseQuery += ' AND OrderStatus__c = \'' + String.escapeSingleQuotes(filters.get('orderStatus')) + '\'';
+        }
+        if (filters.containsKey('vendor')) {
+            baseQuery += ' AND Vendor__c = \'' + String.escapeSingleQuotes(filters.get('vendor')) + '\'';
+        }
+        if (filters.containsKey('oem')) {
+            baseQuery += ' AND OEM__c = \'' + String.escapeSingleQuotes(filters.get('oem')) + '\'';
+        }
+        if (filters.containsKey('salesRep')) {
+            baseQuery += ' AND SalesRep__c = \'' + String.escapeSingleQuotes(filters.get('salesRep')) + '\'';
+        }
+
+        // --- Group & sort ---
+        baseQuery += ' GROUP BY CustomerName__c ORDER BY SUM(Revenue__c) DESC LIMIT ' + topN;
+
+        // --- Execute query ---
+        List<AggregateResult> ars = Database.query(baseQuery);
+
+        // --- Build JSON result ---
+        List<Map<String, Object>> rows = new List<Map<String, Object>>();
+        for (AggregateResult ar : ars) {
+            Map<String, Object> row = new Map<String, Object>();
+            row.put('Customer', String.valueOf(ar.get('CustomerName__c')));
+            row.put('Orders', (Integer)ar.get('totalOrders'));
+            row.put('Quantity', (Decimal)ar.get('totalQty'));
+            row.put('Revenue', (Decimal)ar.get('totalRevenue'));
+            rows.add(row);
+        }
+
+        Result r = new Result();
+        r.summaryJson = JSON.serializePretty(rows); // Let prompt template render tables
+        outputs.add(r);
+
+        return outputs;
+    }
+}
