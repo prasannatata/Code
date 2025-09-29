@@ -1,3 +1,9 @@
+sfdx force:source:deploy -p force-app/main/default/lwc/revenueDropOffTable
+
+
+
+
+
 Thanks for sharing the screenshots — I can now see your full setup (Apex, LWC, `schema.json`, `renderer.json`, and `-meta.xml`). You’re very close, but a few details are causing those errors. Let’s fix this step by step:
 
 ---
