@@ -1,0 +1,57 @@
+public class CustomerAction {
+
+    public class Request {
+        @InvocableVariable public String filtersJson;
+        @InvocableVariable public Integer topN;
+    }
+
+    public class Result {
+        @InvocableVariable public String summaryJson; // rows
+        @InvocableVariable public String metaJson;    // context
+    }
+
+    @InvocableMethod
+    public static List<Result> run(List<Request> requests) {
+        List<Result> outputs = new List<Result>();
+        if (requests.isEmpty()) return outputs;
+
+        Request req = requests[0];
+        Integer topN = (req.topN != null && req.topN > 0) ? req.topN : 10;
+        Map<String,Object> filters = String.isNotBlank(req.filtersJson)
+            ? (Map<String,Object>) JSON.deserializeUntyped(req.filtersJson)
+            : new Map<String,Object>();
+
+        // Build query dynamically (simplified)
+        String baseQuery = 'SELECT CustomerName__c, SUM(Quantity__c) totalQty, SUM(Revenue__c) totalRevenue ' +
+                           'FROM Realistic_OrderLine_Datacsv__dlm';
+
+        List<String> whereParts = new List<String>();
+        for (String f : filters.keySet()) {
+            whereParts.add(f + ' = \'' + String.valueOf(filters.get(f)) + '\'');
+        }
+        if (!whereParts.isEmpty()) baseQuery += ' WHERE ' + String.join(whereParts, ' AND ');
+
+        baseQuery += ' GROUP BY CustomerName__c ORDER BY SUM(Revenue__c) DESC LIMIT ' + topN;
+
+        List<AggregateResult> ars = Database.query(baseQuery);
+
+        List<Map<String,Object>> rows = new List<Map<String,Object>>();
+        for (AggregateResult ar : ars) {
+            rows.add(new Map<String,Object>{
+                'Customer' => ar.get('CustomerName__c'),
+                'Orders'   => 0, // add if needed
+                'Quantity' => ar.get('totalQty'),
+                'Revenue'  => ar.get('totalRevenue')
+            });
+        }
+
+        Result r = new Result();
+        r.summaryJson = JSON.serializePretty(rows);
+        r.metaJson = JSON.serializePretty(new Map<String,Object>{
+            'topN' => topN,
+            'filters' => filters
+        });
+        outputs.add(r);
+        return outputs;
+    }
+}
