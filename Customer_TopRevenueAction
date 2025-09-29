@@ -71,31 +71,21 @@ public with sharing class Customer_TopRevenueAction {
     }
 }
 
-// Create a request for Q1 2025
-Customer_TopRevenueAction.Request req1 = new Customer_TopRevenueAction.Request();
-req1.year = 2025;
-req1.quarter = 1;
-req1.limit = 5;
+// Create a request wrapper
+Customer_TopRevenueAction.Request req = new Customer_TopRevenueAction.Request();
+req.year = 2025;        // Set your year
+req.quarter = 1;        // Set the quarter (optional, null = full year)
+req.limit = 5;          // Top N customers
 
-List<Customer_TopRevenueAction.Request> reqs1 = new List<Customer_TopRevenueAction.Request>{ req1 };
-List<Customer_TopRevenueAction.Result> results1 = Customer_TopRevenueAction.run(reqs1);
+// Put the request into a list (since run() expects a List<Request>)
+List<Customer_TopRevenueAction.Request> requests = new List<Customer_TopRevenueAction.Request>{ req };
 
-System.debug('### Top 5 Customers in Q1 2025 ###');
-for (Customer_TopRevenueAction.Result r : results1) {
-    System.debug(r.customer + ' | Orders: ' + r.orders + ' | Revenue: ' + r.revenue);
-}
+// Call the action
+List<Customer_TopRevenueAction.Result> results = Customer_TopRevenueAction.run(requests);
 
-// Create a request for full year 2025
-Customer_TopRevenueAction.Request req2 = new Customer_TopRevenueAction.Request();
-req2.year = 2025;
-req2.limit = 5;
-
-List<Customer_TopRevenueAction.Request> reqs2 = new List<Customer_TopRevenueAction.Request>{ req2 };
-List<Customer_TopRevenueAction.Result> results2 = Customer_TopRevenueAction.run(reqs2);
-
-System.debug('### Top 5 Customers in Full Year 2025 ###');
-for (Customer_TopRevenueAction.Result r : results2) {
-    System.debug(r.customer + ' | Orders: ' + r.orders + ' | Revenue: ' + r.revenue);
-}
-
+// Debug the output
+for (Customer_TopRevenueAction.Result r : results) {
+    System.debug('Customer: ' + r.customer + 
+                 ', Orders: ' + r.orders + 
+                 ', Revenue: ' + r.revenue);
 }
