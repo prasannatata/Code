@@ -42,3 +42,12 @@ public class Customer_TopRevenueAction {
         return results;
     }
 }
++++++++++
+// Test top 5 customers by revenue
+List<Customer_TopRevenueAction.Request> reqs = new List<Customer_TopRevenueAction.Request>();
+Customer_TopRevenueAction.Request r = new Customer_TopRevenueAction.Request();
+r.topN = 5; // Optional, defaults to 5 if not set
+reqs.add(r);
+
+List<Customer_TopRevenueAction.Response> res = Customer_TopRevenueAction.run(reqs);
+System.debug('>>> Top Customers by Revenue: ' + res[0].result);
