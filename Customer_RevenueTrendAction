@@ -1,47 +1,24 @@
 public with sharing class Customer_RevenueTrendAction {
-    public class Request {
-        @InvocableVariable(required=true)
-        public String customerName;
-    }
+    public class Request { @InvocableVariable public String customerName; }
+    public class Response { @InvocableVariable public String result; }
 
-    public class Response {
-        @InvocableVariable
-        public String result;
-    }
-
-    @InvocableMethod(label='Customer Revenue Trend' description='Show revenue trends for a specific customer')
-    public static List<Response> run(List<Request> requests) {
+    @InvocableMethod
+    public static List<Response> run(List<Request> reqs) {
         List<Response> results = new List<Response>();
-        
-        for (Request r : requests) {
+        for (Request r : reqs) {
             Response res = new Response();
-            
-            // FIX: added OrderStatus__c to avoid missing field issue
-            String query = 'SELECT OrderRefNumber__c, CustomerName__c, Revenue__c, OrderPODate__c, OrderStatus__c ' +
-                           'FROM Realistic_OrderLine_Datacsv__dlm ' +
-                           'WHERE CustomerName__c = \'' + String.escapeSingleQuotes(r.customerName) + '\'';
+
+            String query = 'SELECT ' + OrderDL_Util.BASE_FIELDS +
+                           ' FROM Realistic_OrderLine_Datacsv__dlm ' +
+                           'WHERE CustomerName__c = :r.customerName';
 
             List<Realistic_OrderLine_Datacsv__dlm> rows = Database.query(query);
 
-            if (rows.isEmpty()) {
-                res.result = '❌ No orders found for ' + r.customerName;
-            } else {
-                res.result = OrderDL_Util.fmtOrdersTable(rows, 'Revenue Trend for ' + r.customerName);
-            }
+            if (rows.isEmpty()) res.result = '❌ No orders found for ' + r.customerName;
+            else res.result = OrderDL_Util.fmtOrdersTable(rows, 'Revenue Trend for ' + r.customerName);
 
             results.add(res);
         }
         return results;
     }
 }
-
-List<Customer_RevenueTrendAction.Request> reqs = new List<Customer_RevenueTrendAction.Request>();
-Customer_RevenueTrendAction.Request r = new Customer_RevenueTrendAction.Request();
-r.customerName = 'NYU Langone';  // must match a CustomerName__c from your dataset
-reqs.add(r);
-
-List<Customer_RevenueTrendAction.Response> res = Customer_RevenueTrendAction.run(reqs);
-System.debug('>>> Customer Revenue Trend: ' + res[0].result);
-
-
-
