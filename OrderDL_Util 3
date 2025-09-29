@@ -1,0 +1,35 @@
+public class OrderDL_Util {
+    // Centralized field list for all queries
+    public static final String ORDER_FIELDS =
+        'OrderRefNumber__c, CustomerName__c, Revenue__c, Quantity__c, ' +
+        'OrderPODate__c, OrderCreateDate__c, OrderStatus__c, ' +
+        'Requestor__c, OEM__c, Vendor__c, Modality__c';
+
+    public static String buildBaseQuery() {
+        return 'SELECT ' + ORDER_FIELDS + ' FROM Realistic_OrderLine_Datacsv__dlm ';
+    }
+
+    // Utility: format order results into markdown
+    public static String fmtOrdersTable(List<Realistic_OrderLine_Datacsv__dlm> rows, String title) {
+        if (rows.isEmpty()) {
+            return '❌ No matching orders found.';
+        }
+
+        String header = '## ' + title + '\n' +
+                        'OrderRef | Customer | Status | Revenue | Date | OEM | Vendor | Modality\n' +
+                        '--- | --- | --- | --- | --- | --- | --- | ---\n';
+
+        String body = '';
+        for (Realistic_OrderLine_Datacsv__dlm row : rows) {
+            body += row.OrderRefNumber__c + ' | ' +
+                    row.CustomerName__c + ' | ' +
+                    row.OrderStatus__c + ' | $' +
+                    row.Revenue__c + ' | ' +
+                    String.valueOf(row.OrderPODate__c) + ' | ' +
+                    row.OEM__c + ' | ' +
+                    row.Vendor__c + ' | ' +
+                    row.Modality__c + '\n';
+        }
+        return header + body;
+    }
+}
