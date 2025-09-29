@@ -10,16 +10,16 @@ public with sharing class Customer_RevenueTrendAction {
     }
 
     @InvocableMethod(label='Customer Revenue Trend' description='Show revenue trends for a specific customer')
-    public static List<Response> run(List<Request> reqs) {
+    public static List<Response> run(List<Request> requests) {
         List<Response> results = new List<Response>();
-
-        for (Request r : reqs) {
+        
+        for (Request r : requests) {
             Response res = new Response();
-
-            // FIXED: use escapeSingleQuotes instead of :r.customerName
-            String query = 'SELECT ' + OrderDL_Util.BASE_FIELDS +
-                           ' FROM Realistic_OrderLine_Datacsv__dlm ' +
-                           ' WHERE CustomerName__c = \'' + String.escapeSingleQuotes(r.customerName) + '\'';
+            
+            // FIX: Added OrderStatus__c and OEM__c
+            String query = 'SELECT OrderRefNumber__c, CustomerName__c, Revenue__c, OrderPODate__c, OrderStatus__c, OEM__c ' +
+                           'FROM Realistic_OrderLine_Datacsv__dlm ' +
+                           'WHERE CustomerName__c = \'' + String.escapeSingleQuotes(r.customerName) + '\'';
 
             List<Realistic_OrderLine_Datacsv__dlm> rows = Database.query(query);
 
@@ -31,14 +31,14 @@ public with sharing class Customer_RevenueTrendAction {
 
             results.add(res);
         }
-
         return results;
     }
 }
+
 List<Customer_RevenueTrendAction.Request> reqs = new List<Customer_RevenueTrendAction.Request>();
 Customer_RevenueTrendAction.Request r = new Customer_RevenueTrendAction.Request();
-r.customerName = 'NYU Langone';  // must match an actual CustomerName__c in your CSV data
+r.customerName = 'NYU Langone';  // must match a CustomerName__c from your dataset
 reqs.add(r);
 
 List<Customer_RevenueTrendAction.Response> res = Customer_RevenueTrendAction.run(reqs);
-System.debug('>>> Revenue Trend Result: ' + res[0].result);
+System.debug('>>> Customer Revenue Trend: ' + res[0].result);
