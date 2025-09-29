@@ -1,48 +1,30 @@
-public class Order_GetByQuarterAction {
+public with sharing class Order_GetByQuarterAction {
     public class Request {
-        @InvocableVariable(required=true)
-        public Integer quarter;
-        @InvocableVariable(required=true)
-        public Integer year;
+        @InvocableVariable public Integer quarter;
+        @InvocableVariable public Integer year;
     }
-
-    public class Response {
-        @InvocableVariable
-        public String result;
-    }
+    public class Response { @InvocableVariable public String result; }
 
     @InvocableMethod
-    public static List<Response> run(List<Request> requests) {
+    public static List<Response> run(List<Request> reqs) {
         List<Response> results = new List<Response>();
+        for (Request r : reqs) {
+            Response res = new Response();
 
-        for (Request r : requests) {
-            Date startDate = Date.newInstance(r.year, (r.quarter - 1) * 3 + 1, 1);
+            Date startDate = Date.newInstance(r.year, ((r.quarter - 1) * 3) + 1, 1);
             Date endDate = startDate.addMonths(3).addDays(-1);
 
-            String query = OrderDL_Util.buildBaseQuery() +
+            String query = 'SELECT ' + OrderDL_Util.BASE_FIELDS +
+                           ' FROM Realistic_OrderLine_Datacsv__dlm ' +
                            'WHERE OrderPODate__c >= :startDate AND OrderPODate__c <= :endDate';
 
             List<Realistic_OrderLine_Datacsv__dlm> rows = Database.query(query);
 
-            Response res = new Response();
-            res.result = rows.isEmpty() ?
-                '❌ No orders found for Q' + r.quarter + ' ' + r.year :
-                OrderDL_Util.fmtOrdersTable(rows, 'Orders for Q' + r.quarter + ' ' + r.year);
+            if (rows.isEmpty()) res.result = '❌ No orders found for Q' + r.quarter + ' ' + r.year;
+            else res.result = OrderDL_Util.fmtOrdersTable(rows, 'Orders for Q' + r.quarter + ' ' + r.year);
 
             results.add(res);
         }
         return results;
     }
 }
-
-++++++++
-// Test fetching orders for Q1 2025
-List<Order_GetByQuarterAction.Request> reqs = new List<Order_GetByQuarterAction.Request>();
-Order_GetByQuarterAction.Request r = new Order_GetByQuarterAction.Request();
-r.quarter = 1; // Q1
-r.year = 2025;
-reqs.add(r);
-
-List<Order_GetByQuarterAction.Response> res = Order_GetByQuarterAction.run(reqs);
-System.debug('>>> Quarter Results: ' + res[0].result);
-
