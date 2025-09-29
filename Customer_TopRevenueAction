@@ -77,13 +77,23 @@ public with sharing class Customer_TopRevenueAction {
         return results;
     }
 }
-List<Customer_TopRevenueAction.Request> reqs = new List<Customer_TopRevenueAction.Request>();
-Customer_TopRevenueAction.Request r = new Customer_TopRevenueAction.Request();
-r.year = 2025;
-r.quarter = 1;
-r.maxResults = 5; // ✅ updated field
-reqs.add(r);
+// Build request for Q1 2025
+Customer_TopRevenueAction.Request req = new Customer_TopRevenueAction.Request();
+req.year = 2025;       // Year
+req.quarter = 1;       // Quarter: 1 = Jan–Mar, 2 = Apr–Jun, 3 = Jul–Sep, 4 = Oct–Dec
+req.limit = 5;         // Top N customers
 
-List<Customer_TopRevenueAction.Result> results = Customer_TopRevenueAction.run(reqs);
+List<Customer_TopRevenueAction.Request> reqList = new List<Customer_TopRevenueAction.Request>{ req };
+
+// Run Apex Action
+List<Customer_TopRevenueAction.Result> results = Customer_TopRevenueAction.run(reqList);
+
+// Print results
+System.debug('===== TOP 5 CUSTOMERS FOR Q' + req.quarter + ' ' + req.year + ' =====');
+for (Customer_TopRevenueAction.Result r : results) {
+    System.debug('Customer=' + r.customer + 
+                 ' | Orders=' + r.orders + 
+                 ' | Revenue=' + r.revenue);
+}
 
 System.debug(results);
