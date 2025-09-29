@@ -1,0 +1,74 @@
+public with sharing class Order_GetByQuarterAction {
+    public class Request {
+        @InvocableVariable(label='Year')
+        public Integer year;
+        @InvocableVariable(label='Quarter (1-4)')
+        public Integer quarter;
+        @InvocableVariable(label='Requestor (optional)')
+        public String requestor;
+        @InvocableVariable(label='OEM (optional)')
+        public String oemName;
+    }
+    public class Response {
+        @InvocableVariable(label='Result')
+        public String result;
+    }
+
+    @InvocableMethod(label='Get Orders By Quarter')
+    public static List<Response> run(List<Request> reqs) {
+        List<Response> results = new List<Response>();
+        for (Request r : reqs) {
+            Response res = new Response();
+
+            if (r.year == null || r.quarter == null) {
+                res.result = '⚠️ Please provide both year and quarter (1-4).';
+                results.add(res);
+                continue;
+            }
+
+            Date startDate = OrderDL_Util.getQuarterStart(r.year, r.quarter);
+            Date endDate   = OrderDL_Util.getQuarterEnd(r.year, r.quarter);
+
+            String baseQuery = 'SELECT OrderRefNumber__c, CustomerName__c, Revenue__c, OrderCreateDate__c, OrderStatus__c, OEM__c, Requestor__c ' +
+                               'FROM Realistic_OrderLine_Datacsv__dlm ' +
+                               'WHERE OrderCreateDate__c >= :startDate AND OrderCreateDate__c <= :endDate';
+
+            if (!String.isBlank(r.requestor)) {
+                baseQuery += ' AND Requestor__c = :r.requestor';
+            }
+            if (!String.isBlank(r.oemName)) {
+                baseQuery += ' AND OEM__c = :r.oemName';
+            }
+
+            List<Realistic_OrderLine_Datacsv__dlm> rows = Database.query(baseQuery);
+
+            if (rows.isEmpty()) {
+                res.result = '❌ No orders found for Q' + r.quarter + ' ' + r.year;
+            } else {
+                res.result = OrderDL_Util.fmtOrdersTable(rows, 'Orders for Q' + r.quarter + ' ' + r.year);
+            }
+            results.add(res);
+        }
+        return results;
+    }
+}
+
+
++++++++++++++++
+// ============================================
+// Test Script for Order_GetByQuarterAction
+// ============================================
+
+// Create request wrapper
+Order_GetByQuarterAction.Request req = new Order_GetByQuarterAction.Request();
+req.year = 2025;
+req.quarter = 1; // Q1 → Jan 1 - Mar 31
+
+// Call the action
+List<Order_GetByQuarterAction.Response> results = Order_GetByQuarterAction.run(req);
+
+// Log output
+System.debug('==== Order_GetByQuarterAction Results ====');
+for (Order_GetByQuarterAction.Response r : results) {
+    System.debug(r.result);
+}
