@@ -70,6 +70,115 @@ Formatting Guidance:
 
 * You passed `quarter=1`, but no `year` input was collected, so the Apex method got `null` → crash.
 * Adding a **default year** fallback in instructions fixes this. Example: if no year → use `System.today().year()` inside Apex.
+++++++++++++++++++++++++++++
+
+
+
+Perfect timing 👍 Since we’ve fixed the **Apex class** by renaming `limit → limitSize`, you also need to update your **Agent Action configuration** so that Einstein/Agentforce knows how to pass values into Apex.
+
+Here’s the **updated Agent Action Instructions** for your *Top Customers by Revenue* action:
+
+---
+
+## 🔹 Agent Action Instructions
+
+**Action Label**
+👉 `Get Top Customers by Revenue`
+
+**Agent Action Instructions**
+
+```
+Handles requests to fetch the top N customers by revenue for a given year and (optional) quarter.  
+Always return results in a clear conversational style with:
+1. A short natural-language summary (e.g., "Here are the top 5 customers by revenue in Q1 2025").  
+2. A markdown table with columns: Customer | Orders | Revenue.  
+3. Key insight if possible (e.g., "Mass General contributed the highest revenue").  
+4. Suggested follow-ups like "Compare Q1 vs Q2" or "Show by vendor".
+```
+
+---
+
+## 🔹 Inputs (map these to Apex `Request` fields)
+
+1. **Year**
+
+   * Data Type: Integer
+   * Required: ✅ Yes
+   * Instructions:
+
+     ```
+     Enter the target year for the query (e.g., 2025).  
+     If omitted, default to current year.
+     ```
+
+2. **Quarter**
+
+   * Data Type: Integer (values: 1, 2, 3, 4)
+   * Required: ❌ No (Optional)
+   * Instructions:
+
+     ```
+     Enter quarter number (1, 2, 3, or 4).  
+     If omitted, the whole year will be used.
+     ```
+
+3. **limitSize** (renamed!)
+
+   * Data Type: Integer
+   * Required: ❌ No (Optional, default 5)
+   * Instructions:
+
+     ```
+     Enter how many top customers to return.  
+     If omitted, default is 5.
+     ```
+
+---
+
+## 🔹 Outputs (map these to Apex `Result` fields)
+
+1. **summary**
+
+   * Data Type: Text
+   * Description: Human-readable explanation (e.g., "Top 5 customers in Q1 2025").
+   * Show in conversation: ✅
+
+2. **table**
+
+   * Data Type: Text (Markdown)
+   * Description: Tabular results with Customer | Orders | Revenue.
+   * Show in conversation: ✅
+
+3. **customer**
+
+   * Data Type: Text
+   * Description: Individual customer name.
+   * Show in conversation: ❌ (used internally if you want to drill down)
+
+4. **orders**
+
+   * Data Type: Integer
+   * Description: Number of orders for the customer.
+   * Show in conversation: ❌
+
+5. **revenue**
+
+   * Data Type: Decimal
+   * Description: Revenue value for that customer.
+   * Show in conversation: ❌
+
+---
+
+✅ With this setup:
+
+* User can ask: *"Show me top 5 customers in Q1 2025"*
+* Agent passes `year=2025, quarter=1, limitSize=5` → Apex returns results.
+* Assistant responds with summary + markdown table.
+
+---
+
+Do you want me to also give you a **ready-to-paste JSON config** format for the Agent Action (like how Salesforce expects it in Studio), or do you prefer the step-by-step instructions above?
+
 
 ---
 
