@@ -22,3 +22,15 @@ public with sharing class Customer_RevenueTrendAction {
         return results;
     }
 }
+
+
+// Test for one customer
+List<Customer_RevenueTrendAction.Request> reqs = new List<Customer_RevenueTrendAction.Request>();
+Customer_RevenueTrendAction.Request r = new Customer_RevenueTrendAction.Request();
+r.customerName = 'NYU Langone';   // Must exactly match a value in CustomerName__c
+reqs.add(r);
+
+List<Customer_RevenueTrendAction.Response> res = Customer_RevenueTrendAction.run(reqs);
+for (Customer_RevenueTrendAction.Response rr : res) {
+    System.debug('RESULT => ' + rr.result);
+}
