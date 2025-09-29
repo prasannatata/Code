@@ -1,5 +1,6 @@
 public with sharing class Customer_TopRevenueAction {
     
+    // Request object (inputs)
     public class Request {
         @InvocableVariable(label='Year' required=false)
         public Integer year;
@@ -17,84 +18,94 @@ public with sharing class Customer_TopRevenueAction {
         public String customerNameFilter;
     }
     
+    // Result object (outputs)
     public class Result {
-        @InvocableVariable(label='Result JSON')
-        public String resultJson;
+        @InvocableVariable(label='Customer Name')
+        public String customer;
+        
+        @InvocableVariable(label='Parent Customer')
+        public String parentCustomer;
+        
+        @InvocableVariable(label='Total Orders')
+        public Integer orders;
+        
+        @InvocableVariable(label='Total Revenue')
+        public Decimal revenue;
         
         @InvocableVariable(label='Heading')
         public String heading;
-        
-        @InvocableVariable(label='Error Message')
-        public String errorMessage;
     }
     
+    // Main method
     @InvocableMethod(
         label='Get Top Customers by Revenue' 
         description='Returns top customers by revenue with flexible filtering'
     )
     public static List<Result> run(List<Request> requests) {
         List<Result> outputs = new List<Result>();
-        Result res = new Result();
         
-        try {
-            if (requests == null || requests.isEmpty()) {
-                res.errorMessage = 'No request provided.';
-                outputs.add(res);
-                return outputs;
-            }
-            
-            Request req = requests[0];
-            
-            Integer year = (req.year != null) ? req.year : Date.today().year();
-            Integer quarter = req.quarter;
-            Integer limitSize = (req.limitSize != null && req.limitSize > 0) ? req.limitSize : 10;
-            Decimal minRevenue = req.minRevenue;
-            String customerFilter = req.customerNameFilter;
-            
-            // Date range
-            Date startDate = Date.newInstance(year, 1, 1);
-            Date endDate = Date.newInstance(year, 12, 31);
-            
-            if (quarter != null) {
-                Integer startMonth = (quarter - 1) * 3 + 1;
-                Integer endMonth = startMonth + 2;
-                startDate = Date.newInstance(year, startMonth, 1);
-                endDate = Date.newInstance(year, endMonth, Date.daysInMonth(year, endMonth));
-            }
-            
-            // Build query
-            String soql = buildQuery(startDate, endDate, limitSize, minRevenue, customerFilter);
-            System.debug('Executing SOQL: ' + soql);
-            
-            List<AggregateResult> ars = Database.query(soql);
-            
-            // Convert results into JSON list
-            List<Map<String, Object>> jsonResults = new List<Map<String, Object>>();
-            for (AggregateResult ar : ars) {
-                Map<String, Object> row = new Map<String, Object>();
-                row.put('Customer', (String)ar.get('CustomerName__c'));
-                row.put('ParentCustomer', (String)ar.get('ParentCustomerName__c'));
-                row.put('Orders', (Integer)ar.get('totalOrders'));
-                row.put('Revenue', (Decimal)ar.get('totalRevenue'));
-                jsonResults.add(row);
-            }
-            
-            res.resultJson = JSON.serializePretty(jsonResults);
-            res.heading = buildHeading(year, quarter, limitSize);
-            
-            if (jsonResults.isEmpty()) {
-                res.errorMessage = 'No data found for the specified criteria.';
-            }
-            
-        } catch (Exception e) {
-            res.errorMessage = 'Error: ' + e.getMessage();
+        if (requests == null || requests.isEmpty()) {
+            return outputs;
         }
         
-        outputs.add(res);
+        Request req = requests[0];
+        
+        // defaults
+        Integer year = (req.year != null) ? req.year : Date.today().year();
+        Integer quarter = req.quarter;
+        Integer limitSize = (req.limitSize != null && req.limitSize > 0) ? req.limitSize : 5;
+        Decimal minRevenue = req.minRevenue;
+        String customerFilter = req.customerNameFilter;
+        
+        // validate quarter
+        if (quarter != null && (quarter < 1 || quarter > 4)) {
+            return new List<Result>{ makeError('Invalid quarter: ' + quarter) };
+        }
+        
+        // validate year
+        if (year < 1900 || year > 2100) {
+            return new List<Result>{ makeError('Invalid year: ' + year) };
+        }
+        
+        // date range
+        Date startDate = Date.newInstance(year, 1, 1);
+        Date endDate = Date.newInstance(year, 12, 31);
+        
+        if (quarter != null) {
+            Integer startMonth = (quarter - 1) * 3 + 1;
+            Integer endMonth = startMonth + 2;
+            Integer lastDay = Date.daysInMonth(year, endMonth);
+            
+            startDate = Date.newInstance(year, startMonth, 1);
+            endDate = Date.newInstance(year, endMonth, lastDay);
+        }
+        
+        // build SOQL
+        String soql = buildQuery(startDate, endDate, limitSize, minRevenue, customerFilter);
+        System.debug('Executing SOQL: ' + soql);
+        
+        List<AggregateResult> ars = Database.query(soql);
+        
+        String heading = buildHeading(year, quarter, limitSize);
+        
+        for (AggregateResult ar : ars) {
+            Result r = new Result();
+            r.customer = (String)ar.get('CustomerName__c');
+            r.parentCustomer = (String)ar.get('ParentCustomerName__c');
+            r.orders = (Integer)ar.get('totalOrders');
+            r.revenue = (Decimal)ar.get('totalRevenue');
+            r.heading = heading;
+            outputs.add(r);
+        }
+        
+        if (outputs.isEmpty()) {
+            return new List<Result>{ makeError('No data found for the specified criteria.') };
+        }
+        
         return outputs;
     }
     
-    // Build SOQL query
+    // helper to build query
     private static String buildQuery(
         Date startDate,
         Date endDate,
@@ -127,32 +138,37 @@ public with sharing class Customer_TopRevenueAction {
         return soql;
     }
     
-    // Heading
+    // helper to build heading
     private static String buildHeading(Integer year, Integer quarter, Integer limitSize) {
         String heading = 'Top ' + limitSize + ' customers by revenue in ';
-        if (quarter != null) heading += 'Q' + quarter + ' ';
+        if (quarter != null) {
+            heading += 'Q' + quarter + ' ';
+        }
         heading += year;
         return heading;
     }
+    
+    // helper for error
+    private static Result makeError(String msg) {
+        Result r = new Result();
+        r.heading = msg;
+        r.customer = '';
+        r.parentCustomer = '';
+        r.orders = 0;
+        r.revenue = 0;
+        return r;
+    }
 }
 
+List<Customer_TopRevenueAction.Request> reqs = new List<Customer_TopRevenueAction.Request>();
 
-// Build request
-Customer_TopRevenueAction.Request req = new Customer_TopRevenueAction.Request();
-req.year = 2025;                // test year
-req.quarter = 1;                // Q1
-req.limitSize = 5;              // top 5 customers
-req.minRevenue = 1000;          // optional filter
-req.customerNameFilter = null;  // no name filter
+Customer_TopRevenueAction.Request r = new Customer_TopRevenueAction.Request();
+r.year = 2025;
+r.quarter = 1;
+r.limitSize = 5;
+reqs.add(r);
 
-// Call the Apex action
-List<Customer_TopRevenueAction.Request> reqs = new List<Customer_TopRevenueAction.Request>{ req };
 List<Customer_TopRevenueAction.Result> results = Customer_TopRevenueAction.run(reqs);
 
-// Print outputs
-for (Customer_TopRevenueAction.Result res : results) {
-    System.debug('--- TEST RESULT ---');
-    System.debug('Heading: ' + res.heading);
-    System.debug('Result JSON: ' + res.resultJson);
-    System.debug('Error: ' + res.errorMessage);
-}
+System.debug(JSON.serializePretty(results));
+
