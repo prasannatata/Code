@@ -16,7 +16,7 @@ public with sharing class Customer_RevenueTrendAction {
         for (Request r : reqs) {
             Response res = new Response();
 
-            // FIXED: Use escapeSingleQuotes instead of :r.customerName
+            // FIXED: use escapeSingleQuotes instead of :r.customerName
             String query = 'SELECT ' + OrderDL_Util.BASE_FIELDS +
                            ' FROM Realistic_OrderLine_Datacsv__dlm ' +
                            ' WHERE CustomerName__c = \'' + String.escapeSingleQuotes(r.customerName) + '\'';
@@ -35,11 +35,9 @@ public with sharing class Customer_RevenueTrendAction {
         return results;
     }
 }
-
-
 List<Customer_RevenueTrendAction.Request> reqs = new List<Customer_RevenueTrendAction.Request>();
 Customer_RevenueTrendAction.Request r = new Customer_RevenueTrendAction.Request();
-r.customerName = 'NYU Langone';  // replace with a name from your CSV
+r.customerName = 'NYU Langone';  // must match an actual CustomerName__c in your CSV data
 reqs.add(r);
 
 List<Customer_RevenueTrendAction.Response> res = Customer_RevenueTrendAction.run(reqs);
