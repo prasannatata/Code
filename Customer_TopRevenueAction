@@ -54,7 +54,6 @@ public with sharing class Customer_TopRevenueAction {
     }
 }
 
-
 // Example 1: Get top 5 customers for Q1 2025
 List<Customer_TopRevenueAction.Request> reqs1 = new List<Customer_TopRevenueAction.Request>();
 Customer_TopRevenueAction.Request r1 = new Customer_TopRevenueAction.Request();
@@ -64,9 +63,12 @@ r1.limit = 5;
 reqs1.add(r1);
 
 List<Customer_TopRevenueAction.Result> res1 = Customer_TopRevenueAction.run(reqs1);
-System.debug('### Top 5 Customers in Q1 2025: ' + res1);
+System.debug('### Top 5 Customers in Q1 2025 ###');
+for (Customer_TopRevenueAction.Result r : res1) {
+    System.debug(r.customer + ' | Orders: ' + r.orders + ' | Revenue: ' + r.revenue);
+}
 
-// Example 2: Get top 5 customers for all of 2025
+// Example 2: Get top 5 customers for the whole year 2025
 List<Customer_TopRevenueAction.Request> reqs2 = new List<Customer_TopRevenueAction.Request>();
 Customer_TopRevenueAction.Request r2 = new Customer_TopRevenueAction.Request();
 r2.year = 2025;
@@ -74,4 +76,9 @@ r2.limit = 5;
 reqs2.add(r2);
 
 List<Customer_TopRevenueAction.Result> res2 = Customer_TopRevenueAction.run(reqs2);
+System.debug('### Top 5 Customers for Year 2025 ###');
+for (Customer_TopRevenueAction.Result r : res2) {
+    System.debug(r.customer + ' | Orders: ' + r.orders + ' | Revenue: ' + r.revenue);
+}
+
 System.debug('### Top 5 Customers in 2025: ' + res2);
