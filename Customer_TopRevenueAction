@@ -1,84 +1,100 @@
 public with sharing class Customer_TopRevenueAction {
-    
+
+    // Request wrapper
+    public class Request {
+        @InvocableVariable public Integer year;
+        @InvocableVariable public Integer quarter; // optional
+        @InvocableVariable public Integer limit;
+    }
+
+    // Response wrapper
+    public class Result {
+        @InvocableVariable public String customer;
+        @InvocableVariable public Integer orders;
+        @InvocableVariable public Decimal revenue;
+    }
+
     @InvocableMethod(label='Get Top Customers by Revenue')
     public static List<Result> run(List<Request> requests) {
         List<Result> results = new List<Result>();
-        
-        for (Request req : requests) {
-            Integer yearVal = (req.year != null) ? req.year : Date.today().year();
-            Integer quarterVal = req.quarter;
-            Integer limitVal = (req.limit != null) ? req.limit : 5;
-            
-            // Build SOQL dynamically
-            String soql = 'SELECT CustomerName__c customer, COUNT(Id) orders, SUM(Revenue__c) revenue ' +
-                          'FROM Order__c ' +
-                          'WHERE CALENDAR_YEAR(OrderDate__c) = :yearVal ';
-            
-            if (quarterVal != null) {
-                soql += 'AND CALENDAR_QUARTER(OrderDate__c) = :quarterVal ';
+
+        if (requests.isEmpty()) return results;
+        Request req = requests[0];
+
+        Integer targetYear   = (req.year != null) ? req.year : Date.today().year();
+        Integer targetQuarter = req.quarter; // if null → full year
+        Integer maxLimit     = (req.limit != null && req.limit > 0) ? req.limit : 5;
+
+        Date startDate;
+        Date endDate;
+
+        if (targetQuarter != null) {
+            if (targetQuarter == 1) {
+                startDate = Date.newInstance(targetYear, 1, 1);
+                endDate   = Date.newInstance(targetYear, 3, 31);
+            } else if (targetQuarter == 2) {
+                startDate = Date.newInstance(targetYear, 4, 1);
+                endDate   = Date.newInstance(targetYear, 6, 30);
+            } else if (targetQuarter == 3) {
+                startDate = Date.newInstance(targetYear, 7, 1);
+                endDate   = Date.newInstance(targetYear, 9, 30);
+            } else if (targetQuarter == 4) {
+                startDate = Date.newInstance(targetYear, 10, 1);
+                endDate   = Date.newInstance(targetYear, 12, 31);
             }
-            
-            soql += 'GROUP BY CustomerName__c ' +
-                    'ORDER BY revenue DESC ' +
-                    'LIMIT :limitVal';
-            
-            List<AggregateResult> aggResults = Database.query(soql);
-            
-            for (AggregateResult ar : aggResults) {
-                results.add(new Result(
-                    (String)ar.get('customer'),
-                    (Integer)ar.get('orders'),
-                    (Decimal)ar.get('revenue')
-                ));
-            }
+        } else {
+            startDate = Date.newInstance(targetYear, 1, 1);
+            endDate   = Date.newInstance(targetYear, 12, 31);
+        }
+
+        // Aggregate query against your Data Lake Object
+        List<AggregateResult> aggResults = [
+            SELECT CustomerName__c customer,
+                   COUNT(Id) orders,
+                   SUM(Revenue__c) revenue
+            FROM Realistic_OrderLine_Datacsv__dlm
+            WHERE OrderCreateDate__c >= :startDate
+              AND OrderCreateDate__c <= :endDate
+            GROUP BY CustomerName__c
+            ORDER BY SUM(Revenue__c) DESC
+            LIMIT :maxLimit
+        ];
+
+        for (AggregateResult ar : aggResults) {
+            Result r = new Result();
+            r.customer = (String) ar.get('customer');
+            r.orders   = (Integer) ar.get('orders');
+            r.revenue  = (Decimal) ar.get('revenue');
+            results.add(r);
         }
         return results;
     }
-    
-    public class Request {
-        @InvocableVariable(label='Year') public Integer year;
-        @InvocableVariable(label='Quarter') public Integer quarter;
-        @InvocableVariable(label='Limit') public Integer limit;
-    }
-    
-    public class Result {
-        @InvocableVariable(label='Customer') public String customer;
-        @InvocableVariable(label='Orders') public Integer orders;
-        @InvocableVariable(label='Total Revenue') public Decimal revenue;
-        
-        public Result(String c, Integer o, Decimal r) {
-            customer = c;
-            orders = o;
-            revenue = r;
-        }
-    }
 }
 
-// Example 1: Get top 5 customers for Q1 2025
-List<Customer_TopRevenueAction.Request> reqs1 = new List<Customer_TopRevenueAction.Request>();
+
+// Top 5 customers in Q1 2025
 Customer_TopRevenueAction.Request r1 = new Customer_TopRevenueAction.Request();
 r1.year = 2025;
 r1.quarter = 1;
 r1.limit = 5;
-reqs1.add(r1);
 
+List<Customer_TopRevenueAction.Request> reqs1 = new List<Customer_TopRevenueAction.Request>{ r1 };
 List<Customer_TopRevenueAction.Result> res1 = Customer_TopRevenueAction.run(reqs1);
+
 System.debug('### Top 5 Customers in Q1 2025 ###');
 for (Customer_TopRevenueAction.Result r : res1) {
     System.debug(r.customer + ' | Orders: ' + r.orders + ' | Revenue: ' + r.revenue);
 }
 
-// Example 2: Get top 5 customers for the whole year 2025
-List<Customer_TopRevenueAction.Request> reqs2 = new List<Customer_TopRevenueAction.Request>();
+// Top 5 customers for full 2025
 Customer_TopRevenueAction.Request r2 = new Customer_TopRevenueAction.Request();
 r2.year = 2025;
 r2.limit = 5;
-reqs2.add(r2);
 
+List<Customer_TopRevenueAction.Request> reqs2 = new List<Customer_TopRevenueAction.Request>{ r2 };
 List<Customer_TopRevenueAction.Result> res2 = Customer_TopRevenueAction.run(reqs2);
-System.debug('### Top 5 Customers for Year 2025 ###');
+
+System.debug('### Top 5 Customers for 2025 ###');
 for (Customer_TopRevenueAction.Result r : res2) {
     System.debug(r.customer + ' | Orders: ' + r.orders + ' | Revenue: ' + r.revenue);
 }
-
-System.debug('### Top 5 Customers in 2025: ' + res2);
