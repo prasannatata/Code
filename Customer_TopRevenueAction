@@ -1,34 +1,49 @@
 public with sharing class Customer_TopRevenueAction {
 
+    // --------------------
     // Request wrapper
+    // --------------------
     public class Request {
         @InvocableVariable public Integer year;
         @InvocableVariable public Integer quarter; // optional
-        @InvocableVariable public Integer limit;
+        @InvocableVariable public Integer limit;   // optional
     }
 
+    // --------------------
     // Response wrapper
+    // --------------------
     public class Result {
         @InvocableVariable public String customer;
         @InvocableVariable public Integer orders;
         @InvocableVariable public Decimal revenue;
+
+        public Result(String cust, Integer ord, Decimal rev) {
+            this.customer = cust;
+            this.orders = ord;
+            this.revenue = rev;
+        }
     }
 
+    // --------------------
+    // Main Invocable Method
+    // --------------------
     @InvocableMethod(label='Get Top Customers by Revenue')
     public static List<Result> run(List<Request> requests) {
         List<Result> results = new List<Result>();
-        if (requests.isEmpty()) return results;
 
+        if (requests.isEmpty()) return results;
         Request req = requests[0];
 
-        Integer targetYear    = (req.year != null) ? req.year : Date.today().year();
-        Integer targetQuarter = req.quarter;  // if null → full year
+        // Use defaults if null
+        Integer targetYear    = (req.year != null)    ? req.year    : Date.today().year();
+        Integer targetQuarter = (req.quarter != null) ? req.quarter : null;  // null → full year
         Integer maxLimit      = (req.limit != null && req.limit > 0) ? req.limit : 5;
 
         Date startDate;
         Date endDate;
 
         if (targetQuarter != null) {
+            // Quarter-specific
             if (targetQuarter == 1) {
                 startDate = Date.newInstance(targetYear, 1, 1);
                 endDate   = Date.newInstance(targetYear, 3, 31);
@@ -48,39 +63,41 @@ public with sharing class Customer_TopRevenueAction {
             endDate   = Date.newInstance(targetYear, 12, 31);
         }
 
-        // Query top customers
+        // --------------------
+        // Query aggregated data
+        // --------------------
         List<AggregateResult> aggResults = [
-            SELECT CustomerName__c customer, 
-                   COUNT(Id) orders, 
+            SELECT CustomerName__c customer,
+                   COUNT(Id) orders,
                    SUM(Revenue__c) revenue
             FROM Realistic_OrderLine_Datacsv__dlm
-            WHERE OrderCreateDate__c >= :startDate 
-              AND OrderCreateDate__c <= :endDate
+            WHERE OrderPODate__c >= :startDate
+              AND OrderPODate__c <= :endDate
             GROUP BY CustomerName__c
             ORDER BY SUM(Revenue__c) DESC
             LIMIT :maxLimit
         ];
 
         for (AggregateResult ar : aggResults) {
-            Result r = new Result();
-            r.customer = (String) ar.get('customer');
-            r.orders   = (Integer) ar.get('orders');
-            r.revenue  = (Decimal) ar.get('revenue');
-            results.add(r);
+            results.add(new Result(
+                (String) ar.get('customer'),
+                (Integer) ar.get('orders'),
+                (Decimal) ar.get('revenue')
+            ));
         }
 
         return results;
     }
 }
-Customer_TopRevenueAction.Request req = new Customer_TopRevenueAction.Request();
-req.year = 2025;
-req.quarter = 1;   // Try null for full year
-req.limit = 5;
+List<Customer_TopRevenueAction.Request> reqs = new List<Customer_TopRevenueAction.Request>();
 
-List<Customer_TopRevenueAction.Request> requests = new List<Customer_TopRevenueAction.Request>{ req };
+Customer_TopRevenueAction.Request r = new Customer_TopRevenueAction.Request();
+r.year = 2025;
+r.quarter = 1;  // Q1 only
+r.limit = 5;    // top 5
 
-List<Customer_TopRevenueAction.Result> results = Customer_TopRevenueAction.run(requests);
+reqs.add(r);
 
-for (Customer_TopRevenueAction.Result r : results) {
-    System.debug('Customer: ' + r.customer + ', Orders: ' + r.orders + ', Revenue: ' + r.revenue);
-}
+List<Customer_TopRevenueAction.Result> results = Customer_TopRevenueAction.run(reqs);
+
+System.debug('=== Top Customers === ' + results);
