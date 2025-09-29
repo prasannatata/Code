@@ -1,0 +1,97 @@
+public with sharing class Customer_TopRevenueAction {
+    
+    // Input
+    public class Request {
+        @InvocableVariable(label='Year' required=false)
+        public Integer year;
+        
+        @InvocableVariable(label='Quarter (1-4)' required=false)
+        public Integer quarter;
+        
+        @InvocableVariable(label='Limit' required=false)
+        public Integer limitSize;
+        
+        @InvocableVariable(label='Minimum Revenue' required=false)
+        public Decimal minRevenue;
+        
+        @InvocableVariable(label='Customer Name Filter' required=false)
+        public String customerNameFilter;
+    }
+
+    // Output Row
+    public class Row {
+        @InvocableVariable(label='Customer') public String customer;
+        @InvocableVariable(label='Parent Customer') public String parentCustomer;
+        @InvocableVariable(label='Total Orders') public Integer orders;
+        @InvocableVariable(label='Revenue') public Decimal revenue;
+        @InvocableVariable(label='Heading') public String heading;
+        @InvocableVariable(label='Error Message') public String errorMessage;
+    }
+    
+    @InvocableMethod(label='Get Top Customers by Revenue')
+    public static List<Row> run(List<Request> requests) {
+        List<Row> results = new List<Row>();
+
+        if (requests == null || requests.isEmpty()) {
+            return errorOutput('No request provided');
+        }
+        
+        Request req = requests[0];
+        
+        try {
+            Integer year = (req.year != null) ? req.year : Date.today().year();
+            Integer quarter = req.quarter;
+            Integer limitSize = (req.limitSize != null && req.limitSize > 0) ? req.limitSize : 5;
+
+            Date startDate = Date.newInstance(year, 1, 1);
+            Date endDate = Date.newInstance(year, 12, 31);
+            
+            if (quarter != null) {
+                Integer startMonth = (quarter - 1) * 3 + 1;
+                Integer endMonth = startMonth + 2;
+                startDate = Date.newInstance(year, startMonth, 1);
+                endDate = Date.newInstance(year, endMonth, Date.daysInMonth(year, endMonth));
+            }
+            
+            String heading = 'Top ' + limitSize + ' customers by revenue in ' + (quarter != null ? 'Q' + quarter + ' ' : '') + year;
+            
+            String soql = 
+                'SELECT CustomerName__c, ParentCustomerName__c, COUNT(Id) totalOrders, SUM(Revenue__c) totalRevenue ' +
+                'FROM Realistic_OrderLine_Datacsv__dlm ' +
+                'WHERE OrderCreateDate__c >= :startDate AND OrderCreateDate__c <= :endDate ' +
+                'GROUP BY CustomerName__c, ParentCustomerName__c ' +
+                'ORDER BY SUM(Revenue__c) DESC NULLS LAST ' +
+                'LIMIT :limitSize';
+            
+            List<AggregateResult> ars = Database.query(soql);
+            
+            for (AggregateResult ar : ars) {
+                Row r = new Row();
+                r.customer = (String)ar.get('CustomerName__c');
+                r.parentCustomer = (String)ar.get('ParentCustomerName__c');
+                r.orders = (Integer)ar.get('totalOrders');
+                r.revenue = (Decimal)ar.get('totalRevenue');
+                r.heading = heading;
+                results.add(r);
+            }
+            
+            if (results.isEmpty()) {
+                Row r = new Row();
+                r.heading = heading;
+                r.errorMessage = 'No data found for the criteria.';
+                results.add(r);
+            }
+            
+        } catch (Exception e) {
+            return errorOutput('Error: ' + e.getMessage());
+        }
+        
+        return results;
+    }
+    
+    private static List<Row> errorOutput(String msg) {
+        Row r = new Row();
+        r.errorMessage = msg;
+        return new List<Row>{ r };
+    }
+}
