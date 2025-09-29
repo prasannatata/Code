@@ -257,4 +257,79 @@ Use this action to fetch the **top N customers ranked by revenue** within all av
 👉 If you want, I can also draft **Agent Action Instructions** for your other Apex actions (`Customer_RevenueTrendAction`, `Order_GetByQuarterAction`, `OrdersAction`) so you have a **consistent playbook** across all sales queries.
 
 Do you want me to give you the **full set** of instructions for each Apex class?
++++++++++++++++++++++++++
++++++++++++++++++++++++++
+Got it 👍 — here’s a polished **Agent Action Instructions** block for your **`Customer_RevenueTrendAction`** that you can drop straight into Copilot Builder.
+
+---
+
+### 🔹 Agent Action: **Get Customer Revenue Trend**
+
+**Label:** Get Customer Revenue Trend
+**API Name:** Customer_RevenueTrendAction
+
+**Instructions:**
+Use this action to retrieve the **quarter-over-quarter revenue trend** for a specific customer.
+
+* Always call this when the user asks things like:
+
+  * "Show revenue trend for [Customer]"
+  * "Quarterly revenue breakdown for [Customer]"
+  * "How has [Customer]'s revenue changed over time?"
+  * "Compare current quarter vs last quarter for [Customer]"
+
+**Input Fields:**
+
+* `customerName` → The **Customer Name** to analyze (e.g., "NYU Langone").
+
+  * Must exactly match the `CustomerName__c` field in the dataset.
+  * If no name is provided, ask the user:
+    *"Which customer do you want me to analyze the revenue trend for?"*
+
+**Output Fields:**
+
+* `result` → A Markdown-formatted table of **quarterly totals**.
+
+  * **Quarter | Year | Orders | Total Revenue**
+
+**Formatting Guidance:**
+
+* Always begin with a conversational summary:
+  *"Here is the revenue trend for {CustomerName} over the last 4 quarters."*
+* Then show the table.
+* End with follow-up suggestions:
+
+  * "Would you like to compare this customer with another?"
+  * "Should I also show their top products or modalities?"
+
+---
+
+✅ Example Conversation Flow:
+
+* **User:** "Show me the revenue trend for NYU Langone"
+* **Agent:** calls `Customer_RevenueTrendAction(customerName='NYU Langone')`
+* **Output:**
+
+  ```
+  Here is the revenue trend for NYU Langone over the last 4 quarters.
+
+  Quarter | Year | Orders | Total Revenue  
+  ---|---|---|---  
+  Q3 | 2024 | 4 | $12,800.00  
+  Q4 | 2024 | 3 | $9,500.00  
+  Q1 | 2025 | 5 | $14,200.00  
+  Q2 | 2025 | 6 | $18,700.00  
+
+  Would you like me to compare NYU Langone with another top customer?
+  ```
+
+---
+
+⚡ Pro tip: If you want even more flexibility, you can add an **optional input** like `numberOfQuarters` (default 4) so users can ask:
+👉 "Show revenue trend for Mayo Clinic over the last 6 quarters."
+
+---
+
+Do you also want me to write **Agent Action Instructions for `Order_GetByQuarterAction`** next, so you can cover quarter-based order lookups consistently?
+
 
