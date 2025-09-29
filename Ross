@@ -1,40 +1,62 @@
-public with sharing class CustomerTopRevenueAction {
+public with sharing class Customer_TopRevenueAction {
+    public class Request {
+        @InvocableVariable(required=false)
+        public Integer limitSize;
+    }
 
-    @InvocableMethod(label='Get Top Revenue Customers')
-    public static List<RevenueRecord__c> getTopRevenueCustomers(List<Id> accountIds) {
-        List<RevenueRecord__c> results = new List<RevenueRecord__c>();
+    public class Response {
+        @InvocableVariable
+        public String result;
+    }
 
-        try {
-            // Query Accounts with revenue-related fields
-            // 🔑 Update field API names to match your org schema
-            List<Account> accList = [
-                SELECT Id, Name, ParentId, 
-                       AnnualRevenue, 
-                       NumberOfOrders__c   // <-- Check if this field exists
-                FROM Account
-                WHERE Id IN :accountIds
-            ];
+    @InvocableMethod(label='Top Revenue Customers' description='List top customers by revenue')
+    public static List<Response> run(List<Request> reqs) {
+        List<Response> results = new List<Response>();
 
-            // Transform into Revenue Records (not inserting!)
-            for (Account acc : accList) {
-                RevenueRecord__c rec = new RevenueRecord__c();
-                rec.CustomerName__c = acc.Name;
-                rec.ParentCustomerName__c = (acc.ParentId != null) 
-                                               ? acc.Parent.Name 
-                                               : 'N/A';
-                rec.Revenue__c = (acc.AnnualRevenue != null) 
-                                               ? acc.AnnualRevenue 
-                                               : 0;
-                rec.NumberOfOrders__c = (acc.NumberOfOrders__c != null) 
-                                               ? acc.NumberOfOrders__c 
-                                               : 0;
-                results.add(rec);
+        for (Request r : reqs) {
+            Response res = new Response();
+            Integer limitValue = (r.limitSize != null && r.limitSize > 0) ? r.limitSize : 10;
+
+            // 👇 Use aliases in SOQL
+            String query =
+                'SELECT CustomerName__c custName, SUM(Revenue__c) sumRevenue, COUNT(Id) orderCount ' +
+                'FROM Realistic_OrderLine_Datacsv__dlm ' +
+                'GROUP BY CustomerName__c ' +
+                'ORDER BY SUM(Revenue__c) DESC ' +
+                'LIMIT ' + limitValue;
+
+            List<AggregateResult> rows = Database.query(query);
+
+            if (rows.isEmpty()) {
+                res.result = '❌ No customer revenue data found.';
+            } else {
+                String table = 'Customer | Orders | Total Revenue\n';
+                table += '---|---|---\n';
+
+                for (AggregateResult ar : rows) {
+                    String custName = (String)ar.get('custName');
+                    String orderCount = String.valueOf(ar.get('orderCount'));
+                    Decimal revenue = (Decimal)ar.get('sumRevenue'); // ✅ alias used here
+
+                    table += custName + ' | ' + orderCount + ' | $' + revenue.setScale(2) + '\n';
+                }
+
+                res.result = table;
             }
 
-        } catch (Exception e) {
-            System.debug('⚠️ Error in getTopRevenueCustomers: ' + e.getMessage());
+            results.add(res);
         }
 
         return results;
     }
 }
+
+List<Customer_TopRevenueAction.Request> reqs = new List<Customer_TopRevenueAction.Request>();
+
+Customer_TopRevenueAction.Request r = new Customer_TopRevenueAction.Request();
+r.limitSize = 5; // top 5
+reqs.add(r);
+
+List<Customer_TopRevenueAction.Response> res = Customer_TopRevenueAction.run(reqs);
+
+System.debug('>>> Top Revenue Customers:\n' + res[0].result);
