@@ -1,74 +1,58 @@
 public with sharing class Order_GetByQuarterAction {
+
+    // Request wrapper
     public class Request {
-        @InvocableVariable(label='Year')
-        public Integer year;
-        @InvocableVariable(label='Quarter (1-4)')
-        public Integer quarter;
-        @InvocableVariable(label='Requestor (optional)')
-        public String requestor;
-        @InvocableVariable(label='OEM (optional)')
-        public String oemName;
+        @InvocableVariable(required=true)
+        public Integer quarter;   // 1–4
+        @InvocableVariable(required=true)
+        public Integer year;      // e.g., 2025
     }
+
+    // Response wrapper
     public class Response {
-        @InvocableVariable(label='Result')
+        @InvocableVariable
         public String result;
     }
 
     @InvocableMethod(label='Get Orders By Quarter')
-    public static List<Response> run(List<Request> reqs) {
+    public static List<Response> run(List<Request> requests) {
         List<Response> results = new List<Response>();
-        for (Request r : reqs) {
+
+        for (Request r : requests) {
             Response res = new Response();
 
-            if (r.year == null || r.quarter == null) {
-                res.result = '⚠️ Please provide both year and quarter (1-4).';
-                results.add(res);
-                continue;
-            }
+            Date startDate = Date.newInstance(r.year, (r.quarter - 1) * 3 + 1, 1);
+            Date endDate   = startDate.addMonths(3).addDays(-1);
 
-            Date startDate = OrderDL_Util.getQuarterStart(r.year, r.quarter);
-            Date endDate   = OrderDL_Util.getQuarterEnd(r.year, r.quarter);
+            String query = 'SELECT OrderRefNumber__c, CustomerName__c, Revenue__c, OrderPODate__c ' +
+                           'FROM Realistic_OrderLine_Datacsv__dlm ' +
+                           'WHERE OrderPODate__c >= :startDate AND OrderPODate__c <= :endDate';
 
-            String baseQuery = 'SELECT OrderRefNumber__c, CustomerName__c, Revenue__c, OrderCreateDate__c, OrderStatus__c, OEM__c, Requestor__c ' +
-                               'FROM Realistic_OrderLine_Datacsv__dlm ' +
-                               'WHERE OrderCreateDate__c >= :startDate AND OrderCreateDate__c <= :endDate';
-
-            if (!String.isBlank(r.requestor)) {
-                baseQuery += ' AND Requestor__c = :r.requestor';
-            }
-            if (!String.isBlank(r.oemName)) {
-                baseQuery += ' AND OEM__c = :r.oemName';
-            }
-
-            List<Realistic_OrderLine_Datacsv__dlm> rows = Database.query(baseQuery);
+            List<Realistic_OrderLine_Datacsv__dlm> rows = Database.query(query);
 
             if (rows.isEmpty()) {
                 res.result = '❌ No orders found for Q' + r.quarter + ' ' + r.year;
             } else {
-                res.result = OrderDL_Util.fmtOrdersTable(rows, 'Orders for Q' + r.quarter + ' ' + r.year);
+                res.result = OrderDL_Util.fmtOrdersTable(
+                    rows,
+                    'Orders for Q' + r.quarter + ' ' + r.year
+                );
             }
+
             results.add(res);
         }
         return results;
     }
 }
-
-
-+++++++++++++++
-// ============================================
-// Test Script for Order_GetByQuarterAction
-// ============================================
-
-// Create request wrapper
+// Test Q1 2025 Orders
 Order_GetByQuarterAction.Request req = new Order_GetByQuarterAction.Request();
+req.quarter = 1;
 req.year = 2025;
-req.quarter = 1; // Q1 → Jan 1 - Mar 31
 
-// Call the action
-List<Order_GetByQuarterAction.Response> results = Order_GetByQuarterAction.run(req);
+List<Order_GetByQuarterAction.Response> results =
+    Order_GetByQuarterAction.run(new List<Order_GetByQuarterAction.Request>{ req });
 
-// Log output
-System.debug('==== Order_GetByQuarterAction Results ====');
+System.debug('==== Q1 Orders ====');
 for (Order_GetByQuarterAction.Response r : results) {
     System.debug(r.result);
 }
