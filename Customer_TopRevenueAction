@@ -9,7 +9,7 @@ public with sharing class Customer_TopRevenueAction {
 
     // Response wrapper
     public class Result {
-        @InvocableVariable public String heading;
+        @InvocableVariable public String heading;   // for ONE record only
         @InvocableVariable public String customer;
         @InvocableVariable public Integer orders;
         @InvocableVariable public Decimal revenue;
@@ -78,14 +78,16 @@ public with sharing class Customer_TopRevenueAction {
             LIMIT :maxLimit
         ];
 
-        // Build results
+        // Add heading only for the FIRST row
+        Boolean isFirst = true;
         for (AggregateResult ar : aggResults) {
             results.add(new Result(
-                heading,
+                isFirst ? heading : null,   // only first row has heading
                 (String)ar.get('cust'),
                 (Integer)ar.get('orders'),
                 (Decimal)ar.get('totalRevenue')
             ));
+            isFirst = false;
         }
 
         return results;
