@@ -1,80 +1,82 @@
-public class CustomerAction {
+public with sharing class CustomerAction {
 
+    // Request wrapper (from Agent)
     public class Request {
-        @InvocableVariable public String filtersJson;
-        @InvocableVariable public Integer topN;
+        @InvocableVariable(label='Year' required=false)
+        public Integer year;
+
+        @InvocableVariable(label='Quarter' required=false)
+        public Integer quarter;
+
+        @InvocableVariable(label='Top N' required=false)
+        public Integer topN;
+
+        @InvocableVariable(label='Extra Filters (JSON)' required=false)
+        public String filtersJson; // optional, future-proof for dynamic filters
     }
 
+    // Response wrapper (to Agent)
     public class Result {
-        @InvocableVariable public String summaryJson; // rows
-        @InvocableVariable public String metaJson;    // context
+        @InvocableVariable(label='Summary JSON')
+        public String summaryJson;
     }
 
-    @InvocableMethod
+    @InvocableMethod(label='Dynamic Customer Summary')
     public static List<Result> run(List<Request> requests) {
         List<Result> outputs = new List<Result>();
+
         if (requests.isEmpty()) return outputs;
-
         Request req = requests[0];
-        Integer topN = (req.topN != null && req.topN > 0) ? req.topN : 10;
-        Map<String,Object> filters = String.isNotBlank(req.filtersJson)
-            ? (Map<String,Object>) JSON.deserializeUntyped(req.filtersJson)
-            : new Map<String,Object>();
 
-        // Build query dynamically (simplified)
-        String baseQuery = 'SELECT CustomerName__c, SUM(Quantity__c) totalQty, SUM(Revenue__c) totalRevenue ' +
-                           'FROM Realistic_OrderLine_Datacsv__dlm';
+        // Default values
+        Integer yearVal    = (req.year     != null) ? req.year : Date.today().year();
+        Integer quarterVal = (req.quarter  != null) ? req.quarter : null;
+        Integer topN       = (req.topN     != null && req.topN > 0) ? req.topN : 10;
 
-        List<String> whereParts = new List<String>();
-        for (String f : filters.keySet()) {
-            whereParts.add(f + ' = \'' + String.valueOf(filters.get(f)) + '\'');
+        // Base query
+        String baseQuery =
+            'SELECT CustomerName__c, ' +
+            'SUM(Quantity__c) totalQty, ' +
+            'SUM(Revenue__c) totalRevenue ' +
+            'FROM Realistic_OrderLine_Datacsv__dlm ' +
+            'WHERE CALENDAR_YEAR(OrderCreateDate__c) = :yearVal ';
+
+        if (quarterVal != null) {
+            baseQuery += 'AND CALENDAR_QUARTER(OrderCreateDate__c) = :quarterVal ';
         }
-        if (!whereParts.isEmpty()) baseQuery += ' WHERE ' + String.join(whereParts, ' AND ');
 
-        baseQuery += ' GROUP BY CustomerName__c ORDER BY SUM(Revenue__c) DESC LIMIT ' + topN;
+        baseQuery +=
+            'GROUP BY CustomerName__c ' +
+            'ORDER BY SUM(Revenue__c) DESC ' +
+            'LIMIT :topN';
 
+        // Execute query
         List<AggregateResult> ars = Database.query(baseQuery);
 
-        List<Map<String,Object>> rows = new List<Map<String,Object>>();
+        // Build JSON output
+        List<Map<String, Object>> rows = new List<Map<String, Object>>();
         for (AggregateResult ar : ars) {
-            rows.add(new Map<String,Object>{
-                'Customer' => ar.get('CustomerName__c'),
-                'Orders'   => 0, // add if needed
-                'Quantity' => ar.get('totalQty'),
-                'Revenue'  => ar.get('totalRevenue')
-            });
+            Map<String, Object> row = new Map<String, Object>();
+            row.put('Customer', ar.get('CustomerName__c'));
+            row.put('Quantity', ar.get('totalQty'));
+            row.put('Revenue', ar.get('totalRevenue'));
+            rows.add(row);
         }
 
+        // Wrap result
         Result r = new Result();
-        r.summaryJson = JSON.serializePretty(rows);
-        r.metaJson = JSON.serializePretty(new Map<String,Object>{
-            'topN' => topN,
-            'filters' => filters
-        });
+        r.summaryJson = JSON.serializePretty(rows); // structured JSON for prompt template
         outputs.add(r);
+
         return outputs;
     }
 }
 
-
-// Build a test request
+// Run CustomerAction with Year 2025, Q1, Top 5
 CustomerAction.Request req = new CustomerAction.Request();
-req.topN = 5; // ask top 5 customers
-req.filtersJson = JSON.serialize(new Map<String,Object>{
-    'Year' => '2025',
-    'Quarter' => '1'
-});
+req.year = 2025;
+req.quarter = 1;
+req.topN = 5;
 
-// Call your class
-List<CustomerAction.Request> requests = new List<CustomerAction.Request>{ req };
-List<CustomerAction.Result> results = CustomerAction.run(requests);
-
-// Log outputs
-for (CustomerAction.Result r : results) {
-    System.debug('===== SUMMARY JSON =====');
-    System.debug(r.summaryJson);
-
-    System.debug('===== META JSON =====');
-    System.debug(r.metaJson);
-}
-
+List<CustomerAction.Result> results = CustomerAction.run(new List<CustomerAction.Request>{ req });
+System.debug('OUTPUT: ' + results[0].summaryJson);
