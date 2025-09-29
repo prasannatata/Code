@@ -1,0 +1,77 @@
+Perfect — thanks for showing me your `Order_GetByQuarterAction` setup.
+Right now the `System.NullPointerException: Argument cannot be null` is happening because **the `year` parameter isn’t being collected or defaulted properly**. Your `quarter` input is set up, but the `year` variable in Apex is ending up as `null`.
+
+Here’s how to **fix and update your action instructions + inputs/outputs**:
+
+---
+
+### 🔧 Inputs
+
+1. **Quarter (quarter)**
+
+   * **Data Type**: `Integer`
+   * **Require input**: ✅ Checked
+   * **Collect from user**: ✅ Checked
+   * **Instructions**:
+
+     ```
+     Enter quarter number (1, 2, 3, or 4).  
+     If the user says "last quarter", calculate relative to today.  
+     ```
+
+2. **Year (year)**
+
+   * **Data Type**: `Integer`
+   * **Require input**: ❌ (optional)
+   * **Collect from user**: ✅ (but default if missing)
+   * **Instructions**:
+
+     ```
+     Enter the year for the orders (e.g., 2025).  
+     If omitted, default to the current year.
+     ```
+
+---
+
+### 📝 Agent Action Instructions
+
+```
+Use this action to retrieve all orders created within a specific quarter and year.
+
+Formatting Guidance:
+1. Start with a short conversational summary.
+   Example: "Here are the top orders for Q2 2025. Most activity came from Siemens and Philips."
+
+2. Present results in a clean markdown table:
+   | OrderRef | Customer | Status | Revenue | OEM | Vendor | Modality | PO Date |
+
+3. Provide key insights below the table:
+   - Highlight top customers, vendors, or anomalies.
+   - Example: "Mass General shows the highest spend this quarter ($4.4K)."
+   - Example: "CT orders dropped compared to last quarter."
+
+4. End with interactive follow-ups:
+   - "Would you like me to compare this quarter vs last quarter?"
+   - "Do you want to drill down by customer or vendor?"
+   - "Should I create follow-up tasks for delayed orders?"
+```
+
+---
+
+### ✅ Output Mapping
+
+* **Result (String)**
+  → Map this to your Apex class’s `result` field.
+  → Ensure “Show in Conversation” is checked.
+
+---
+
+### ⚡ Why it was failing
+
+* You passed `quarter=1`, but no `year` input was collected, so the Apex method got `null` → crash.
+* Adding a **default year** fallback in instructions fixes this. Example: if no year → use `System.today().year()` inside Apex.
+
+---
+
+👉 Next Step:
+Would you like me to **update all your actions (TopRevenueCustomers, CustomerRevenueTrend, etc.)** with the same UI-friendly markdown + conversational guardrails like this one? That way every action behaves consistently.
