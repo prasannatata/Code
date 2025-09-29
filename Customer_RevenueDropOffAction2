@@ -187,3 +187,62 @@ public with sharing class Customer_RevenueDropOffAction {
         }
     }
 }
+
+
++++++++++++
+++++++++++
+// Test 1: Default (Current vs Previous Quarter)
+Customer_RevenueDropOffAction.Request req1 = new Customer_RevenueDropOffAction.Request();
+req1.topN = 10;
+
+List<Customer_RevenueDropOffAction.Request> requests1 = new List<Customer_RevenueDropOffAction.Request>{req1};
+List<Customer_RevenueDropOffAction.Response> responses1 = Customer_RevenueDropOffAction.run(requests1);
+
+System.debug('===== TEST 1: DEFAULT QUARTERS =====');
+System.debug('Summary: ' + responses1[0].summaryText);
+System.debug('Period 1: ' + responses1[0].period1Label);
+System.debug('Period 2: ' + responses1[0].period2Label);
+System.debug('Customer Count: ' + responses1[0].customerNames.size());
+if (responses1[0].customerNames.size() > 0) {
+    System.debug('First Customer: ' + responses1[0].customerNames[0]);
+    System.debug('Period 1 Rev: ' + responses1[0].period1Revenue[0]);
+    System.debug('Period 2 Rev: ' + responses1[0].period2Revenue[0]);
+    System.debug('Drop Amount: ' + responses1[0].dropAmount[0]);
+    System.debug('Drop %: ' + responses1[0].dropPercentage[0]);
+}
+
+// Test 2: Q1 2025 vs Q4 2024
+Customer_RevenueDropOffAction.Request req2 = new Customer_RevenueDropOffAction.Request();
+req2.topN = 5;
+req2.period1Start = Date.newInstance(2024, 10, 1);
+req2.period1End = Date.newInstance(2024, 12, 31);
+req2.period2Start = Date.newInstance(2025, 1, 1);
+req2.period2End = Date.newInstance(2025, 3, 31);
+
+List<Customer_RevenueDropOffAction.Request> requests2 = new List<Customer_RevenueDropOffAction.Request>{req2};
+List<Customer_RevenueDropOffAction.Response> responses2 = Customer_RevenueDropOffAction.run(requests2);
+
+System.debug('===== TEST 2: Q1 2025 vs Q4 2024 =====');
+System.debug('Summary: ' + responses2[0].summaryText);
+System.debug('Customer Count: ' + responses2[0].customerNames.size());
+
+// Test 3: Last 6 months
+Date today = Date.today();
+Date sixMonthsAgo = today.addMonths(-6);
+Date twelveMonthsAgo = today.addMonths(-12);
+
+Customer_RevenueDropOffAction.Request req3 = new Customer_RevenueDropOffAction.Request();
+req3.topN = 10;
+req3.period1Start = twelveMonthsAgo;
+req3.period1End = sixMonthsAgo.addDays(-1);
+req3.period2Start = sixMonthsAgo;
+req3.period2End = today;
+
+List<Customer_RevenueDropOffAction.Request> requests3 = new List<Customer_RevenueDropOffAction.Request>{req3};
+List<Customer_RevenueDropOffAction.Response> responses3 = Customer_RevenueDropOffAction.run(requests3);
+
+System.debug('===== TEST 3: LAST 6 MONTHS =====');
+System.debug('Summary: ' + responses3[0].summaryText);
+System.debug('Period 1: ' + responses3[0].period1Label);
+System.debug('Period 2: ' + responses3[0].period2Label);
+System.debug('Customer Count: ' + responses3[0].customerNames.size());
