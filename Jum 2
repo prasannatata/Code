@@ -1,62 +1,114 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
-    <apiVersion>64.0</apiVersion>
-    <isExposed>true</isExposed>
-    <masterLabel>Revenue Drop-Off Table</masterLabel>
-    <targets>
-        <target>lightning__AgentforceOutput</target>
-    </targets>
-    <targetConfigs>
-        <targetConfig targets="lightning__AgentforceOutput">
-            <sourceType name="lightning__listType" itemTypeName="c__RevenueDropOffResponse"/>
-        </targetConfig>
-    </targetConfigs>
-</LightningComponentBundle>
+Thanks for sharing the screenshots — I can now see your full setup (Apex, LWC, `schema.json`, `renderer.json`, and `-meta.xml`). You’re very close, but a few details are causing those errors. Let’s fix this step by step:
 
+---
 
+## 1. **Fix the Invalid Target in `-meta.xml`**
 
+Right now your `revenueDropOffTable.js-meta.xml` still has:
 
+```xml
+<target>lightning__AgentConsole</target>
+```
 
+That target doesn’t exist. For **Agentforce Output**, the correct one is:
 
+```xml
+<targets>
+    <target>lightning__AgentforceOutput</target>
+</targets>
+<targetConfigs>
+    <targetConfig targets="lightning__AgentforceOutput">
+        <sourceType name="lightning__listType" itemTypeName="c__RevenueDropOffResponse"/>
+    </targetConfig>
+</targetConfigs>
+```
 
-import { LightningElement, api } from 'lwc';
+⚠️ Note: keep **`lightning__AgentforceOutput`** (not `AgentConsole`).
 
-export default class RevenueDropOffTable extends LightningElement {
-    @api value; // Agentforce will pass DropOffWrapper list here
+---
 
-    columns = [
-        { label: 'Customer', fieldName: 'customerName' },
-        { label: 'Period 1 Revenue', fieldName: 'period1Revenue' },
-        { label: 'Period 2 Revenue', fieldName: 'period2Revenue' },
-        { label: 'Drop Amount', fieldName: 'dropAmount' },
-        { label: 'Drop %', fieldName: 'dropPercentage' }
-    ];
+## 2. **Check Your Folder & File Naming**
 
-    get rows() {
-        let out = [];
-        if (this.value && Array.isArray(this.value)) {
-            out = this.value.map(item => ({
-                customerName: item.customerName,
-                period1Revenue: item.period1Revenue,
-                period2Revenue: item.period2Revenue,
-                dropAmount: item.dropAmount,
-                dropPercentage: item.dropPercentage
-            }));
-        }
-        return out;
-    }
+From your screenshot:
+
+* LWC folder = `lwc/revenueDropOfffabel` (typo “fabel” vs “table”)
+* Another LWC = `lwc/revenueDropOffResponse` (correct)
+
+👉 Salesforce treats folder names as the component name. Make sure:
+
+* Your **table LWC folder** is named exactly:
+  `revenueDropOffTable`
+* Inside it, files must be:
+
+  * `revenueDropOffTable.html`
+  * `revenueDropOffTable.js`
+  * `revenueDropOffTable.js-meta.xml`
+
+If folder/file names don’t match, you’ll get **“No base file for markup”** errors like you saw.
+
+---
+
+## 3. **Confirm Your Custom Lightning Type**
+
+Your `schema.json` looks good:
+
+```json
+{
+  "title": "Revenue Drop-Off Response",
+  "description": "Wrapper for revenue drop-off details",
+  "lightning:type": "@apexClassType/c__RevenueDropOffController$DropoffWrapper"
 }
+```
 
+But check:
 
+* In Apex, your wrapper is named `DropOffWrapper` (capital O).
+  👉 Ensure casing matches:
+  `"c__RevenueDropOffController$DropOffWrapper"`
 
-<template>
-    <lightning-card title="Revenue Drop-Off Analysis" icon-name="standard:account">
-        <lightning-datatable
-            data={rows}
-            columns={columns}
-            key-field="customerName"
-            hide-checkbox-column>
-        </lightning-datatable>
-    </lightning-card>
-</template>
+---
 
+## 4. **Renderer JSON Points to Correct Component**
+
+Your `renderer.json` is good:
+
+```json
+{
+  "collection": {
+    "renderer": {
+      "componentOverrides": {
+        "$": {
+          "definition": "c/revenueDropOffTable"
+        }
+      }
+    }
+  }
+}
+```
+
+This will render using your LWC table component.
+
+---
+
+## 5. **Redeploy in Order**
+
+Do this sequence:
+
+1. Fix the **folder name** typo → `revenueDropOffTable`
+2. Fix `-meta.xml` → replace `AgentConsole` with `AgentforceOutput`
+3. Check `schema.json` wrapper casing
+4. Deploy all:
+
+   ```bash
+   sfdx force:source:deploy -p force-app/main/default/lwc/revenueDropOffTable
+   sfdx force:source:deploy -p force-app/main/default/RevenueDropOffResponse
+   sfdx force:source:deploy -p force-app/main/default/classes/RevenueDropOffController.cls
+   ```
+
+---
+
+✅ After this, you should be able to select **Custom Salesforce Lightning Type → RevenueDropOffResponse** in your Agent Action output.
+
+---
+
+Do you want me to give you a **ready-to-paste corrected `revenueDropOffTable.js-meta.xml`** file so you can replace it right away?
