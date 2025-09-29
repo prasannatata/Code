@@ -1,6 +1,8 @@
 public with sharing class Customer_TopRevenueAction {
     
-    // Request from Agent
+    // -------------------------
+    // Request Wrapper
+    // -------------------------
     public class Request {
         @InvocableVariable(label='Year' required=false)
         public Integer year;
@@ -16,15 +18,17 @@ public with sharing class Customer_TopRevenueAction {
         
         @InvocableVariable(label='Customer Name Filter' required=false)
         public String customerNameFilter;
-        
-        @InvocableVariable(label='Group By (CustomerName__c, Vendor__c, Modality__c)' required=false)
-        public String groupByField;
+
+        @InvocableVariable(label='Group By Field' required=false)
+        public String groupByField; // default: CustomerName__c
     }
     
-    // Response to Agent
+    // -------------------------
+    // Result Wrapper
+    // -------------------------
     public class Result {
-        @InvocableVariable(label='Group Value')
-        public String groupValue;
+        @InvocableVariable(label='Customer Name')
+        public String customer;
         
         @InvocableVariable(label='Parent Customer')
         public String parentCustomer;
@@ -38,22 +42,31 @@ public with sharing class Customer_TopRevenueAction {
         @InvocableVariable(label='Heading')
         public String heading;
         
+        @InvocableVariable(label='Group Value')
+        public String groupValue;
+        
         @InvocableVariable(label='Error Message')
         public String errorMessage;
     }
     
+    // -------------------------
+    // Entry Point
+    // -------------------------
     @InvocableMethod(
-        label='Get Top Records by Revenue' 
-        description='Returns top customers, vendors, or modalities by revenue with flexible filtering'
+        label='Get Top Customers by Revenue' 
+        description='Returns top customers by revenue with flexible filtering'
     )
     public static List<Result> run(List<Request> requests) {
         List<Result> outputs = new List<Result>();
-        if (requests == null || requests.isEmpty()) return outputs;
+        
+        if (requests == null || requests.isEmpty()) {
+            return errorOutput('No request provided.');
+        }
         
         Request req = requests[0];
         
         try {
-            // Defaults
+            // Default values
             Integer year = (req.year != null) ? req.year : Date.today().year();
             Integer quarter = req.quarter;
             Integer limitSize = (req.limitSize != null && req.limitSize > 0) ? req.limitSize : 10;
@@ -61,17 +74,17 @@ public with sharing class Customer_TopRevenueAction {
             String customerFilter = req.customerNameFilter;
             String groupByField = String.isNotBlank(req.groupByField) ? req.groupByField : 'CustomerName__c';
             
-            // Validate quarter
-            if (quarter != null && (quarter < 1 || quarter > 4)) {
-                return errorOutput('Invalid quarter: ' + quarter + '. Must be 1-4.');
-            }
-            
             // Validate year
             if (year < 1900 || year > 2100) {
                 return errorOutput('Invalid year: ' + year);
             }
             
-            // Date range
+            // Validate quarter
+            if (quarter != null && (quarter < 1 || quarter > 4)) {
+                return errorOutput('Invalid quarter: ' + quarter + '. Must be 1-4.');
+            }
+            
+            // Calculate date range
             Date startDate = Date.newInstance(year, 1, 1);
             Date endDate = Date.newInstance(year, 12, 31);
             
@@ -84,32 +97,38 @@ public with sharing class Customer_TopRevenueAction {
                 endDate = Date.newInstance(year, endMonth, lastDay);
             }
             
-            // Build query
+            // Build and run query
             String soql = buildQuery(startDate, endDate, limitSize, minRevenue, customerFilter, groupByField);
             System.debug('Executing SOQL: ' + soql);
             
-            // Run query
             List<AggregateResult> ars = Database.query(soql);
+            
+            // Heading
             String heading = buildHeading(year, quarter, limitSize, groupByField);
             
             // Process results
             for (AggregateResult ar : ars) {
                 Result r = new Result();
-                r.groupValue = (String)ar.get(groupByField);
+                
                 if (groupByField == 'CustomerName__c') {
+                    r.customer = (String)ar.get('CustomerName__c');
                     r.parentCustomer = (String)ar.get('ParentCustomerName__c');
+                } else {
+                    r.groupValue = String.valueOf(ar.get(groupByField));
                 }
+                
                 r.orders = (Integer)ar.get('totalOrders');
                 r.revenue = (Decimal)ar.get('totalRevenue');
                 r.heading = heading;
                 outputs.add(r);
             }
             
+            // Handle no results
             if (outputs.isEmpty()) {
-                Result noData = new Result();
-                noData.heading = heading;
-                noData.errorMessage = 'No data found for the specified criteria.';
-                outputs.add(noData);
+                Result r = new Result();
+                r.heading = heading;
+                r.errorMessage = 'No data found for the specified criteria.';
+                outputs.add(r);
             }
             
         } catch (Exception e) {
@@ -119,7 +138,9 @@ public with sharing class Customer_TopRevenueAction {
         return outputs;
     }
     
+    // -------------------------
     // Build SOQL
+    // -------------------------
     private static String buildQuery(
         Date startDate,
         Date endDate,
@@ -137,40 +158,46 @@ public with sharing class Customer_TopRevenueAction {
             'WHERE OrderCreateDate__c >= ' + startDate.format() +
             ' AND OrderCreateDate__c <= ' + endDate.format() + ' ';
         
+        // Filter by customer name if grouping by customer
         if (String.isNotBlank(customerFilter) && groupByField == 'CustomerName__c') {
             soql += 'AND CustomerName__c LIKE \'%' + String.escapeSingleQuotes(customerFilter) + '%\' ';
         }
         
+        // Grouping
         soql += 'GROUP BY ' + groupByField;
         if (groupByField == 'CustomerName__c') {
             soql += ', ParentCustomerName__c ';
         }
         
+        // Aggregate filter
         if (minRevenue != null && minRevenue > 0) {
             soql += 'HAVING SUM(Revenue__c) >= ' + minRevenue + ' ';
         }
         
+        // Sorting & limit
         soql += 'ORDER BY SUM(Revenue__c) DESC NULLS LAST ' +
                 'LIMIT ' + limitSize;
         
         return soql;
     }
     
-    // Heading
+    // -------------------------
+    // Build heading
+    // -------------------------
     private static String buildHeading(Integer year, Integer quarter, Integer limitSize, String groupByField) {
-        String heading = 'Top ' + limitSize + ' ';
-        if (groupByField == 'Vendor__c') heading += 'vendors';
-        else if (groupByField == 'Modality__c') heading += 'modalities';
-        else heading += 'customers';
+        String heading = 'Top ' + limitSize + ' ' + groupByField.replace('__c','') + ' by revenue in ';
         
-        heading += ' by revenue in ';
-        if (quarter != null) heading += 'Q' + quarter + ' ';
+        if (quarter != null) {
+            heading += 'Q' + quarter + ' ';
+        }
         heading += year;
         
         return heading;
     }
     
-    // Error Utility
+    // -------------------------
+    // Utility for error
+    // -------------------------
     private static List<Result> errorOutput(String message) {
         Result r = new Result();
         r.errorMessage = message;
@@ -185,7 +212,7 @@ Customer_TopRevenueAction.Request r = new Customer_TopRevenueAction.Request();
 r.year = 2025;
 r.quarter = 1;
 r.limitSize = 5;
-r.groupByField = 'CustomerName__c'; // Try Vendor__c or Modality__c
+r.groupByField = 'CustomerName__c';
 reqs.add(r);
 
 List<Customer_TopRevenueAction.Result> results = Customer_TopRevenueAction.run(reqs);
