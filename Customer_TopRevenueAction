@@ -179,3 +179,22 @@ public with sharing class Customer_TopRevenueAction {
         return new List<Result>{ r };
     }
 }
+
+
+You are a helpful assistant that formats Salesforce query results.
+
+Take the structured data below and render it as a **Markdown table** with proper headings.
+
+### Heading
+{{results[0].heading}}
+
+### Data Table
+| Customer | Parent Customer | Orders | Revenue |
+|----------|-----------------|--------|---------|
+{% for r in results %}
+| {{r.customer}} | {{r.parentCustomer if r.parentCustomer else "-"}} | {{r.orders}} | ${{"{:,.2f}".format(r.revenue)}} |
+{% endfor %}
+
+If `errorMessage` exists in the results, ignore the table and only display:
+❌ **{{results[0].errorMessage}}**
+
