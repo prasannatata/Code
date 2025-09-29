@@ -45,3 +45,40 @@ public with sharing class RevenueHelper {
         return results;
     }
 }
+
+// Test script to fetch top 5 customers by revenue
+Integer yearValue = 2025;
+
+try {
+    // Aggregate query: group by CustomerName__c, sum revenue, count orders
+    AggregateResult[] groupedResults = [
+        SELECT CustomerName__c,
+               ParentCustomerName__c,
+               COUNT_DISTINCT(OrderRefNumber__c) totalOrders,
+               SUM(Revenue__c) totalRevenue
+        FROM Realistic_OrderLine_Datacsv__dlm
+        WHERE CALENDAR_YEAR(OrderCreateDate__c) = :yearValue
+        GROUP BY CustomerName__c, ParentCustomerName__c
+        ORDER BY SUM(Revenue__c) DESC
+        LIMIT 5
+    ];
+
+    System.debug('===== Top 5 customers by revenue in ' + yearValue + ' =====');
+
+    for (AggregateResult ar : groupedResults) {
+        String customer       = (String)ar.get('CustomerName__c');
+        String parentCustomer = (String)ar.get('ParentCustomerName__c');
+        Integer orders        = (Integer)ar.get('totalOrders');
+        Decimal revenue       = (Decimal)ar.get('totalRevenue');
+
+        System.debug(
+            'Customer: ' + customer +
+            ' | Parent: ' + parentCustomer +
+            ' | Orders: ' + orders +
+            ' | Revenue: $' + revenue
+        );
+    }
+
+} catch (Exception e) {
+    System.debug('⚠️ Error while fetching top revenue customers: ' + e.getMessage());
+}
