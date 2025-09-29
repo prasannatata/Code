@@ -28,7 +28,7 @@ public with sharing class Order_GetByCompositeFiltersAction {
         public Integer recordCount;
     }
     
-    @InvocableMethod(label='Get Orders By Composite Filters' description='Find orders matching multiple criteria')
+    @InvocableMethod(label='Get Orders By Composite Filters')
     public static List<Response> run(List<Request> requests) {
         List<Response> results = new List<Response>();
         
@@ -42,29 +42,34 @@ public with sharing class Order_GetByCompositeFiltersAction {
         try {
             Integer limitValue = (req.limitSize != null && req.limitSize > 0) ? req.limitSize : 100;
             
-            // Build SOQL with proper bind variables
+            // Create local variables for bind
+            String status = req.status;
+            Date poDateBefore = req.poDateBefore;
+            String requestor = req.requestor;
+            String oemName = req.oemName;
+            
+            // Build SOQL
             String soql = 
                 'SELECT OrderRefNumber__c, CustomerName__c, ParentCustomerName__c, ' +
                 'OrderStatus__c, OrderPODate__c, Requestor__c, OEM__c, ' +
                 'Vendor__c, Modality__c, Quantity__c, Revenue__c ' +
                 'FROM Realistic_OrderLine_Datacsv__dlm';
             
-            // Build WHERE clause
             List<String> conditions = new List<String>();
             
-            if (String.isNotBlank(req.status)) {
+            if (String.isNotBlank(status)) {
                 conditions.add('OrderStatus__c = :status');
             }
             
-            if (req.poDateBefore != null) {
+            if (poDateBefore != null) {
                 conditions.add('OrderPODate__c < :poDateBefore');
             }
             
-            if (String.isNotBlank(req.requestor)) {
+            if (String.isNotBlank(requestor)) {
                 conditions.add('Requestor__c = :requestor');
             }
             
-            if (String.isNotBlank(req.oemName)) {
+            if (String.isNotBlank(oemName)) {
                 conditions.add('OEM__c = :oemName');
             }
             
@@ -72,18 +77,10 @@ public with sharing class Order_GetByCompositeFiltersAction {
                 soql += ' WHERE ' + String.join(conditions, ' AND ');
             }
             
-            soql += ' ORDER BY OrderCreateDate__c DESC LIMIT :limitValue';
+            soql += ' ORDER BY OrderCreateDate__c DESC LIMIT ' + limitValue;
             
-            // Create bind variables map
-            Map<String, Object> bindVars = new Map<String, Object>{
-                'status' => req.status,
-                'poDateBefore' => req.poDateBefore,
-                'requestor' => req.requestor,
-                'oemName' => req.oemName,
-                'limitValue' => limitValue
-            };
+            System.debug('Executing SOQL: ' + soql);
             
-            // Execute query with bind variables
             List<Realistic_OrderLine_Datacsv__dlm> orders = Database.query(soql);
             
             if (orders.isEmpty()) {
@@ -91,17 +88,16 @@ public with sharing class Order_GetByCompositeFiltersAction {
                 res.tableData = '';
                 res.recordCount = 0;
             } else {
-                // Build summary
                 res.summaryText = buildSummary(orders, req);
                 res.tableData = buildTable(orders);
                 res.recordCount = orders.size();
             }
             
         } catch (Exception e) {
-            res.summaryText = 'Error retrieving orders: ' + e.getMessage();
+            res.summaryText = 'Error: ' + e.getMessage();
             res.tableData = '';
             res.recordCount = 0;
-            System.debug('Error in Order_GetByCompositeFiltersAction: ' + e.getMessage() + '\n' + e.getStackTraceString());
+            System.debug('Error: ' + e.getMessage() + '\n' + e.getStackTraceString());
         }
         
         results.add(res);
@@ -111,18 +107,10 @@ public with sharing class Order_GetByCompositeFiltersAction {
     private static String buildSummary(List<Realistic_OrderLine_Datacsv__dlm> orders, Request req) {
         List<String> filters = new List<String>();
         
-        if (String.isNotBlank(req.status)) {
-            filters.add('Status: ' + req.status);
-        }
-        if (req.poDateBefore != null) {
-            filters.add('PO Date before: ' + req.poDateBefore.format());
-        }
-        if (String.isNotBlank(req.requestor)) {
-            filters.add('Requestor: ' + req.requestor);
-        }
-        if (String.isNotBlank(req.oemName)) {
-            filters.add('OEM: ' + req.oemName);
-        }
+        if (String.isNotBlank(req.status)) filters.add('Status: ' + req.status);
+        if (req.poDateBefore != null) filters.add('PO Date before: ' + req.poDateBefore.format());
+        if (String.isNotBlank(req.requestor)) filters.add('Requestor: ' + req.requestor);
+        if (String.isNotBlank(req.oemName)) filters.add('OEM: ' + req.oemName);
         
         String filterText = !filters.isEmpty() ? ' (' + String.join(filters, ', ') + ')' : '';
         
@@ -133,11 +121,8 @@ public with sharing class Order_GetByCompositeFiltersAction {
             if (order.Quantity__c != null) totalQty += order.Quantity__c;
         }
         
-        String summary = 'Found ' + orders.size() + ' orders' + filterText + '. ';
-        summary += 'Total Revenue: $' + totalRevenue.setScale(2).format() + ', ';
-        summary += 'Total Quantity: ' + totalQty;
-        
-        return summary;
+        return 'Found ' + orders.size() + ' orders' + filterText + '. Total Revenue: $' + 
+               totalRevenue.setScale(2).format() + ', Total Quantity: ' + totalQty;
     }
     
     private static String buildTable(List<Realistic_OrderLine_Datacsv__dlm> orders) {
@@ -151,9 +136,6 @@ public with sharing class Order_GetByCompositeFiltersAction {
             output += '   • PO Date: ' + (order.OrderPODate__c != null ? order.OrderPODate__c.format() : 'N/A') + '\n';
             output += '   • Requestor: ' + (order.Requestor__c != null ? order.Requestor__c : 'N/A') + '\n';
             output += '   • OEM: ' + (order.OEM__c != null ? order.OEM__c : 'N/A') + '\n';
-            output += '   • Vendor: ' + (order.Vendor__c != null ? order.Vendor__c : 'N/A') + '\n';
-            output += '   • Modality: ' + (order.Modality__c != null ? order.Modality__c : 'N/A') + '\n';
-            output += '   • Quantity: ' + (order.Quantity__c != null ? String.valueOf(order.Quantity__c) : 'N/A') + '\n';
             output += '   • Revenue: ' + (order.Revenue__c != null ? '$' + order.Revenue__c.setScale(2).format() : 'N/A') + '\n\n';
             num++;
         }
@@ -164,10 +146,7 @@ public with sharing class Order_GetByCompositeFiltersAction {
 
 
 
-
-+++++++++++++++++++
-
-++++++++++++++
+// Test 1: Filter by Status only
 System.debug('========== TEST 1: Filter by Status ==========');
 Order_GetByCompositeFiltersAction.Request req1 = new Order_GetByCompositeFiltersAction.Request();
 req1.status = 'Pending';
@@ -182,6 +161,7 @@ if (!results1.isEmpty()) {
     System.debug('Table Data:\n' + results1[0].tableData);
 }
 
+// Test 2: Filter by PO Date Before
 System.debug('\n========== TEST 2: Filter by PO Date ==========');
 Order_GetByCompositeFiltersAction.Request req2 = new Order_GetByCompositeFiltersAction.Request();
 req2.poDateBefore = Date.newInstance(2025, 6, 1);
@@ -195,6 +175,7 @@ if (!results2.isEmpty()) {
     System.debug('Table Data:\n' + results2[0].tableData);
 }
 
+// Test 3: Multiple Filters (Status + Date + Requestor)
 System.debug('\n========== TEST 3: Multiple Filters ==========');
 Order_GetByCompositeFiltersAction.Request req3 = new Order_GetByCompositeFiltersAction.Request();
 req3.status = 'Pending';
@@ -211,6 +192,7 @@ if (!results3.isEmpty()) {
     System.debug('Table Data:\n' + results3[0].tableData);
 }
 
+// Test 4: Filter by OEM
 System.debug('\n========== TEST 4: Filter by OEM ==========');
 Order_GetByCompositeFiltersAction.Request req4 = new Order_GetByCompositeFiltersAction.Request();
 req4.oemName = 'OEMY';
@@ -224,6 +206,7 @@ if (!results4.isEmpty()) {
     System.debug('Table Data:\n' + results4[0].tableData);
 }
 
+// Test 5: All Filters Combined
 System.debug('\n========== TEST 5: All Filters Combined ==========');
 Order_GetByCompositeFiltersAction.Request req5 = new Order_GetByCompositeFiltersAction.Request();
 req5.status = 'Completed';
@@ -241,7 +224,8 @@ if (!results5.isEmpty()) {
     System.debug('Table Data:\n' + results5[0].tableData);
 }
 
-System.debug('\n========== TEST 6: No Filters (All Orders) ==========');
+// Test 6: No Filters (Get all orders with limit)
+System.debug('\n========== TEST 6: No Filters ==========');
 Order_GetByCompositeFiltersAction.Request req6 = new Order_GetByCompositeFiltersAction.Request();
 req6.limitSize = 3;
 
@@ -251,6 +235,21 @@ List<Order_GetByCompositeFiltersAction.Response> results6 =
 if (!results6.isEmpty()) {
     System.debug('Summary: ' + results6[0].summaryText);
     System.debug('Table Data:\n' + results6[0].tableData);
+}
+
+// Test 7: Filter by Requestor only
+System.debug('\n========== TEST 7: Filter by Requestor ==========');
+Order_GetByCompositeFiltersAction.Request req7 = new Order_GetByCompositeFiltersAction.Request();
+req7.requestor = 'Jane Doe';
+req7.limitSize = 5;
+
+List<Order_GetByCompositeFiltersAction.Response> results7 = 
+    Order_GetByCompositeFiltersAction.run(new List<Order_GetByCompositeFiltersAction.Request>{ req7 });
+
+if (!results7.isEmpty()) {
+    System.debug('Summary: ' + results7[0].summaryText);
+    System.debug('Record Count: ' + results7[0].recordCount);
+    System.debug('Table Data:\n' + results7[0].tableData);
 }
 
 System.debug('\n========== ALL TESTS COMPLETE ==========');
