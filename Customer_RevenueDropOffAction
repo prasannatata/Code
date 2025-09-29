@@ -134,3 +134,137 @@ List<Customer_RevenueDropOffAction.Response> responses = Customer_RevenueDropOff
 
 System.debug('===== REVENUE DROP-OFF RESULTS =====');
 System.debug(responses[0].result);
+
+
++++++++++++++++++++++++
+Here's exactly what to fill in each field for the **Detect Revenue Drop-Off** action in Agent Builder:
+
+---
+
+## Agent Action Configuration
+
+### **Agent Action Label**
+```
+Detect Revenue Drop-Off
+```
+
+### **Agent Action Instructions**
+```
+Use this action when the user asks about:
+- Customers with declining revenue between quarters
+- Revenue drop-off analysis
+- Which customers stopped ordering or ordered less
+- Comparing current quarter revenue to previous quarter
+- Identifying at-risk customers based on revenue trends
+
+This action compares the current quarter's revenue to the previous quarter for all customers and returns those with decreased revenue, sorted by drop amount.
+
+Examples:
+- "Which customers had a drop in revenue?"
+- "Show me revenue decline between quarters"
+- "Who stopped ordering as much this quarter?"
+```
+
+### **Loading Text**
+```
+Analyzing revenue trends across quarters...
+```
+
+---
+
+## Input Configuration
+
+### **Input 1: Number of Top Customers**
+
+**Instructions:**
+```
+The maximum number of customers to return in the drop-off analysis. Default is 20 if not specified. Use lower numbers (5-10) for quick summaries, higher numbers (15-20) for comprehensive analysis.
+```
+
+**Data Type:**
+```
+Number
+```
+
+**Require input:**
+```
+☐ Unchecked (not required - has default value of 20)
+```
+
+**Collect data from user:**
+```
+☐ Unchecked (agent can infer or use default)
+```
+
+---
+
+## Output Configuration
+
+### **Output 1: Result**
+
+**Instructions:**
+```
+Contains a markdown table showing customers with revenue drop-off, including:
+- Customer name
+- Previous quarter revenue
+- Current quarter revenue  
+- Drop amount in dollars
+- Drop percentage
+
+Present this data conversationally by:
+1. Summarizing the total number of customers with drop-offs
+2. Highlighting the customer with the biggest decline
+3. Showing the table
+4. Suggesting next steps (create tasks, deeper analysis)
+```
+
+**Data Type:**
+```
+Text
+```
+
+**Filter from agent action:**
+```
+☐ Unchecked
+```
+
+**Show in conversation:**
+```
+☑ Checked
+```
+
+**Output Rendering:**
+```
+Text
+```
+
+---
+
+## Why These Settings?
+
+1. **Agent Action Instructions**: Tells the agent WHEN to use this action (trigger patterns)
+
+2. **Loading Text**: Shows users the agent is working (improves UX for longer queries)
+
+3. **Input is optional**: The action has a default value (20), so agent doesn't need to ask users "how many customers?" unless they specify
+
+4. **Output Instructions**: Tells the agent HOW to present the results conversationally, not just dump the raw table
+
+5. **Show in conversation**: Makes the result visible to users immediately
+
+---
+
+## After Saving
+
+Test with these prompts:
+- "Which customers had revenue drop-off?"
+- "Show me the top 5 customers with declining revenue"
+- "Are any customers ordering less than last quarter?"
+
+The agent should:
+1. Call this action automatically
+2. Show the loading text
+3. Present results conversationally with insights
+4. Offer to create follow-up tasks
+
+Need help configuring the other 12 actions next?
