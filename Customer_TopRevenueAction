@@ -17,13 +17,13 @@ public with sharing class Customer_TopRevenueAction {
     @InvocableMethod(label='Get Top Customers by Revenue')
     public static List<Result> run(List<Request> requests) {
         List<Result> results = new List<Result>();
-
         if (requests.isEmpty()) return results;
+
         Request req = requests[0];
 
-        Integer targetYear   = (req.year != null) ? req.year : Date.today().year();
-        Integer targetQuarter = req.quarter; // if null → full year
-        Integer maxLimit     = (req.limit != null && req.limit > 0) ? req.limit : 5;
+        Integer targetYear    = (req.year != null) ? req.year : Date.today().year();
+        Integer targetQuarter = req.quarter;  // if null → full year
+        Integer maxLimit      = (req.limit != null && req.limit > 0) ? req.limit : 5;
 
         Date startDate;
         Date endDate;
@@ -43,17 +43,18 @@ public with sharing class Customer_TopRevenueAction {
                 endDate   = Date.newInstance(targetYear, 12, 31);
             }
         } else {
+            // Full year
             startDate = Date.newInstance(targetYear, 1, 1);
             endDate   = Date.newInstance(targetYear, 12, 31);
         }
 
-        // Aggregate query against your Data Lake Object
+        // Query top customers
         List<AggregateResult> aggResults = [
-            SELECT CustomerName__c customer,
-                   COUNT(Id) orders,
+            SELECT CustomerName__c customer, 
+                   COUNT(Id) orders, 
                    SUM(Revenue__c) revenue
             FROM Realistic_OrderLine_Datacsv__dlm
-            WHERE OrderCreateDate__c >= :startDate
+            WHERE OrderCreateDate__c >= :startDate 
               AND OrderCreateDate__c <= :endDate
             GROUP BY CustomerName__c
             ORDER BY SUM(Revenue__c) DESC
@@ -67,25 +68,19 @@ public with sharing class Customer_TopRevenueAction {
             r.revenue  = (Decimal) ar.get('revenue');
             results.add(r);
         }
+
         return results;
     }
 }
-
-// Create a request wrapper
 Customer_TopRevenueAction.Request req = new Customer_TopRevenueAction.Request();
-req.year = 2025;        // Set your year
-req.quarter = 1;        // Set the quarter (optional, null = full year)
-req.limit = 5;          // Top N customers
+req.year = 2025;
+req.quarter = 1;   // Try null for full year
+req.limit = 5;
 
-// Put the request into a list (since run() expects a List<Request>)
 List<Customer_TopRevenueAction.Request> requests = new List<Customer_TopRevenueAction.Request>{ req };
 
-// Call the action
 List<Customer_TopRevenueAction.Result> results = Customer_TopRevenueAction.run(requests);
 
-// Debug the output
 for (Customer_TopRevenueAction.Result r : results) {
-    System.debug('Customer: ' + r.customer + 
-                 ', Orders: ' + r.orders + 
-                 ', Revenue: ' + r.revenue);
+    System.debug('Customer: ' + r.customer + ', Orders: ' + r.orders + ', Revenue: ' + r.revenue);
 }
