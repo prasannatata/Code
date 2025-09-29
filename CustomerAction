@@ -116,3 +116,127 @@ template: |
   Render only the table + heading (no explanations).
 
 
+++++++++++
+Perfect 👍 let’s set this up step by step so your **Agent Action** can use the new `CustomerAction` Apex class dynamically.
+
+---
+
+## 🔹 Agent Action Instruction
+
+Here’s how you should configure it in Copilot Studio:
+
+**Action Name**
+`Dynamic Customer Query`
+
+**Description**
+Fetches customers and their revenue/quantity/orders dynamically, with optional filters and top N limit. Returns structured JSON that the prompt template can format into a table.
+
+**Inputs**
+
+* `filters` → (List of `{ fieldName, fieldValue }`)
+  Example:
+
+  ```json
+  [
+    {"fieldName": "OrderStatus__c", "fieldValue": "Pending"},
+    {"fieldName": "OEM__c", "fieldValue": "Siemens"}
+  ]
+  ```
+* `topN` → (Integer, optional) → number of customers to return. Default = 10.
+
+**Outputs**
+
+* `summaryJson` → JSON containing rows of customers, orders, revenue, quantity.
+
+---
+
+## 🔹 Example JSON Returned (from Apex)
+
+```json
+[
+  {
+    "customer": "Mass General",
+    "orders": 12,
+    "quantity": 45,
+    "revenue": 120000.50
+  },
+  {
+    "customer": "Johns Hopkins",
+    "orders": 8,
+    "quantity": 30,
+    "revenue": 91000.00
+  }
+]
+```
+
+---
+
+## 🔹 Prompt Template (Instruction to LLM)
+
+You should link this Agent Action to a **Prompt Template** like:
+
+```yaml
+name: Format_Customer_Summary
+instructions: |
+  You are given customer order summary data in JSON. 
+  Convert it into a clean markdown table with columns:
+  - Customer
+  - Orders
+  - Quantity
+  - Revenue (formatted as $ with commas)
+  
+  If no results, respond: 
+  "⚠️ No matching customers found for the given filters."
+
+input_variables:
+  - name: summaryJson
+    type: string
+    description: "JSON string containing rows of customer data"
+
+response_format: markdown
+```
+
+---
+
+## 🔹 Agent Flow Example
+
+1. User:
+   *"List top 5 customers by revenue where Order Status = Pending and OEM = Siemens."*
+
+2. Agent:
+
+   * Extracts `filters`:
+
+     ```json
+     [
+       {"fieldName": "OrderStatus__c", "fieldValue": "Pending"},
+       {"fieldName": "OEM__c", "fieldValue": "Siemens"}
+     ]
+     ```
+   * Extracts `topN = 5`
+   * Calls **CustomerAction** with those.
+
+3. Apex returns JSON.
+
+4. Prompt Template formats into:
+
+```
+## Top 5 Customers by Revenue (Pending Orders, OEM = Siemens)
+
+| Customer       | Orders | Quantity | Revenue    |
+|----------------|--------|----------|------------|
+| Mass General   | 12     | 45       | $120,000.50|
+| Johns Hopkins  | 8      | 30       | $91,000.00 |
+```
+
+---
+
+⚡ This approach means you **don’t hardcode queries**. Your Apex only sends raw JSON.
+All table formatting happens in the Prompt Template → scalable for **any query**.
+
+---
+
+Do you want me to also write a **ready-to-import Agent Action JSON config** (the file you upload in Copilot Studio) for this `CustomerAction`?
+
+
+
