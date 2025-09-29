@@ -3,8 +3,8 @@ public with sharing class Customer_TopRevenueAction {
     // ===== Request DTO =====
     public class Request {
         @InvocableVariable(label='Year') public Integer year;
-        @InvocableVariable(label='Quarter') public Integer quarter; // 1=Jan–Mar, 2=Apr–Jun, etc.
-        @InvocableVariable(label='Limit') public Integer limit;     // top N
+        @InvocableVariable(label='Quarter') public Integer quarter;   // optional
+        @InvocableVariable(label='Top N Customers') public Integer limitSize; // renamed from limit ✅
     }
 
     // ===== Response DTO =====
@@ -14,9 +14,16 @@ public with sharing class Customer_TopRevenueAction {
         @InvocableVariable public String customer;
         @InvocableVariable public Integer orders;
         @InvocableVariable public Decimal revenue;
+
+        public Result() {}
+        public Result(String cust, Integer ord, Decimal rev) {
+            this.customer = cust;
+            this.orders = ord;
+            this.revenue = rev;
+        }
     }
 
-    // ===== Invocable Entry =====
+    // ===== Invocable Method =====
     @InvocableMethod(label='Get Top Customers by Revenue')
     public static List<Result> run(List<Request> reqs) {
         List<Result> out = new List<Result>();
@@ -32,7 +39,7 @@ public with sharing class Customer_TopRevenueAction {
             Date startDate;
             Date endDate;
 
-            // If quarter is provided → compute date range
+            // Quarter-based filtering
             if (r.quarter != null) {
                 if (r.quarter == 1) {
                     startDate = Date.newInstance(r.year, 1, 1);
@@ -48,49 +55,43 @@ public with sharing class Customer_TopRevenueAction {
                     endDate   = Date.newInstance(r.year, 12, 31);
                 }
             } else {
-                // Full year if no quarter
                 startDate = Date.newInstance(r.year, 1, 1);
                 endDate   = Date.newInstance(r.year, 12, 31);
             }
 
-            Integer topN = (r.limit != null && r.limit > 0) ? r.limit : 5;
+            Integer topN = (r.limitSize != null && r.limitSize > 0) ? r.limitSize : 5;
 
-            // ===== Query Data =====
+            // Query
             List<Realistic_OrderLine_Datacsv__dlm> rows = [
-                SELECT CustomerName__c, Quantity__c, Revenue__c, OrderCreateDate__c
+                SELECT CustomerName__c, Revenue__c, OrderCreateDate__c
                 FROM Realistic_OrderLine_Datacsv__dlm
                 WHERE OrderCreateDate__c >= :startDate
                   AND OrderCreateDate__c <= :endDate
             ];
 
-            // ===== Aggregate by Customer =====
+            // Aggregate
             Map<String, Integer> orderCount = new Map<String, Integer>();
             Map<String, Decimal> revenueTotal = new Map<String, Decimal>();
 
             for (Realistic_OrderLine_Datacsv__dlm rdl : rows) {
                 String cust = (rdl.CustomerName__c != null) ? rdl.CustomerName__c : 'Unknown';
-
                 orderCount.put(cust, orderCount.containsKey(cust) ? orderCount.get(cust) + 1 : 1);
                 revenueTotal.put(cust, revenueTotal.containsKey(cust) ? revenueTotal.get(cust) + rdl.Revenue__c : rdl.Revenue__c);
             }
 
-            // ===== Sort by Revenue Descending =====
+            // Sort by revenue
             List<String> custNames = new List<String>(revenueTotal.keySet());
             custNames.sort(new MapSorter(revenueTotal));
 
-            // ===== Build Table Output =====
-            String table = 'Customer | Orders | Revenue \n';
-            table += '--- | --- | --- \n';
-
+            // Build results
+            String table = 'Customer | Orders | Revenue \n--- | --- | --- \n';
             Integer added = 0;
+
             for (String cust : custNames) {
                 if (added >= topN) break;
                 table += cust + ' | ' + orderCount.get(cust) + ' | $' + revenueTotal.get(cust) + '\n';
 
-                Result res = new Result();
-                res.customer = cust;
-                res.orders = orderCount.get(cust);
-                res.revenue = revenueTotal.get(cust);
+                Result res = new Result(cust, orderCount.get(cust), revenueTotal.get(cust));
                 res.table = table;
                 res.summary = '📊 Top ' + topN + ' customers in ' +
                               (r.quarter != null ? 'Q' + r.quarter + ' ' + r.year : 'Year ' + r.year);
@@ -102,25 +103,24 @@ public with sharing class Customer_TopRevenueAction {
         return out;
     }
 
-    // ===== Helper Sorter =====
+    // Comparator for sorting
     public class MapSorter implements Comparator<String> {
         Map<String, Decimal> base;
-        public MapSorter(Map<String, Decimal> base) {
-            this.base = base;
-        }
+        public MapSorter(Map<String, Decimal> base) { this.base = base; }
         public Integer compare(String a, String b) {
             Decimal revA = base.get(a);
             Decimal revB = base.get(b);
             if (revA == revB) return 0;
-            return (revA > revB) ? -1 : 1; // Descending
+            return (revA > revB) ? -1 : 1;
         }
     }
 }
 
+
 Customer_TopRevenueAction.Request req = new Customer_TopRevenueAction.Request();
 req.year = 2025;
 req.quarter = 1;
-req.limit = 5;
+req.limitSize = 5;  // renamed ✅
 
 List<Customer_TopRevenueAction.Request> reqs = new List<Customer_TopRevenueAction.Request>{ req };
 List<Customer_TopRevenueAction.Result> results = Customer_TopRevenueAction.run(reqs);
