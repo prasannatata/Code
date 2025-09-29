@@ -63,3 +63,33 @@ public with sharing class Order_GetByCompositeFiltersAction {
         return results;
     }
 }
+
+
+// Create request object
+Order_GetByCompositeFiltersAction.Request req = new Order_GetByCompositeFiltersAction.Request();
+req.orderStatus = 'Closed';        // Example filter
+req.poDateBefore = Date.today();   // Example filter
+req.requestor = 'John Doe';        // Example filter
+req.oem = 'Siemens';               // Example filter
+
+// Put into a list (because Invocable requires List)
+List<Order_GetByCompositeFiltersAction.Request> reqList = new List<Order_GetByCompositeFiltersAction.Request>();
+reqList.add(req);
+
+// Call the Apex method
+List<Order_GetByCompositeFiltersAction.Result> results =
+    Order_GetByCompositeFiltersAction.run(reqList);
+
+// Debug output in table-like format
+System.debug('=== TOP ORDERS RESULT ===');
+System.debug('Customer | Parent Customer | Status | PO Date | Revenue');
+for (Order_GetByCompositeFiltersAction.Result r : results) {
+    System.debug(
+        r.customer + ' | ' +
+        r.parentCustomer + ' | ' +
+        r.orderStatus + ' | ' +
+        r.poDate + ' | $' +
+        r.revenue
+    );
+}
+
