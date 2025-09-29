@@ -366,3 +366,120 @@ Activate agent
 
 Test Query: "declining revenue in last 6 months"
 Expected Result: Lightning Data Table showing customers with revenue decline, sortable columns, and summary text above the table.RetryClaude can make mistakes. Please double-check responses.
+
+
+
++++++++++++++++
+++++++++++++++++++++
++++++++++++++++++++++++++
++++++++++++++++++++++++++++++++
+++++++++++++++++++++++++++++++++++++++++++++
+Name
+Revenue Drop-Off Analysis
+API Name
+Revenue_DropOff_Analysis
+Classification Description
+Analyzes revenue declines between any two time periods. Identifies customers with reduced or stopped orders by comparing quarterly, monthly, or custom date ranges. Shows results in a sortable data table.
+Scope
+📉 Revenue Decline Detection
+- Compare any two time periods for revenue changes
+- Identify customers who stopped ordering completely
+- Rank customers by drop amount or percentage
+- Quarter-over-quarter, month-over-month, or custom period analysis
+
+🎯 Supported Analysis Types
+- Quarterly comparisons (Q1 vs Q4, etc.)
+- Monthly comparisons (January vs February)
+- Rolling period comparisons (last 6 months vs previous 6)
+- Year-over-year comparisons (2024 vs 2025)
+- Custom date range comparisons
+
+📊 Output Format
+- Lightning Data Table with sortable columns
+- Summary statistics (total customers affected, revenue lost)
+- Period labels for clear comparison
+- Percentage and dollar amount drops
+Instructions
+This topic handles ALL revenue decline and drop-off analysis queries.
+
+TRIGGER PATTERNS:
+Route here when users ask about:
+- Revenue decline, drop-off, decrease, reduction, falling
+- Customers who stopped ordering or ordered less
+- Period-over-period revenue comparisons showing negative changes
+- Lost revenue, revenue loss between timeframes
+- "Who's not ordering anymore" or similar
+
+ACTION TO USE:
+Customer_RevenueDropOffAction
+
+DATE PARAMETER LOGIC:
+The agent must calculate exact dates from natural language and pass them to the action.
+
+Quarter Date Conversions:
+- Q1 = January 1 to March 31
+- Q2 = April 1 to June 30
+- Q3 = July 1 to September 30
+- Q4 = October 1 to December 31
+
+Common Query Patterns:
+
+1. "declining revenue in Q1"
+   User wants to see if Q1 2025 declined vs previous quarter
+   → period1Start = 2024-10-01 (Q4 2024)
+   → period1End = 2024-12-31
+   → period2Start = 2025-01-01 (Q1 2025)
+   → period2End = 2025-03-31
+
+2. "revenue drop last 6 months"
+   Compare most recent 6 months to previous 6 months
+   If today is Sept 29, 2025:
+   → period1Start = 2024-09-29 (12 months ago)
+   → period1End = 2025-03-28 (6 months ago minus 1 day)
+   → period2Start = 2025-03-29 (6 months ago)
+   → period2End = 2025-09-29 (today)
+
+3. "Q2 vs Q1 drop"
+   → period1Start = 2025-01-01 (Q1)
+   → period1End = 2025-03-31
+   → period2Start = 2025-04-01 (Q2)
+   → period2End = 2025-06-30
+
+4. "customers ordering less this quarter"
+   → Leave ALL date parameters empty
+   → Action auto-calculates current vs previous quarter
+
+CRITICAL RULE: Always set period1 as OLDER/BASELINE period and period2 as NEWER/COMPARISON period.
+
+OUTPUT HANDLING:
+The action outputs data to a Lightning Data Table component (revenueDropOffTable) which displays automatically.
+
+After the table is shown:
+1. Add conversational context: "These customers show significant revenue decline and may need immediate attention."
+2. Highlight key finding: Mention the customer with biggest drop
+3. Note critical cases: Call out any customers with $0 in period 2
+4. Suggest action: "Would you like me to create follow-up tasks for these customers?"
+
+GUARDRAILS:
+- If periods are ambiguous, ask: "Which time periods should I compare? For example: Q1 vs Q4, last 6 months, or this year vs last year?"
+- If no drop-offs found: "Great news! No customers showed revenue decline between [P1] and [P2]. All maintained or grew revenue."
+- If user asks about increases instead: "This analyzes declines. For revenue growth, I can show 'Top Revenue Customers' instead. Would you like that?"
+
+NEVER:
+- Make up dates - always calculate precisely
+- Skip the conversational summary after showing the table
+- Show analysis without offering next steps
+Example User Input
+declining revenue in Q1
+which customers had revenue drop-off?
+revenue decline between Q2 and Q3
+customers ordering less last 6 months
+who stopped ordering this quarter?
+compare January vs February revenue drops
+show revenue decrease year over year
+Q4 2024 vs Q1 2025 decline analysis
+accounts with reduced purchases
+identify customers with falling revenue
+revenue drop from last quarter to this quarter
+customers who haven't reordered
+which accounts show declining spend?
