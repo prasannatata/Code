@@ -1,35 +1,56 @@
-public class OrderDL_Util {
-    // Centralized field list for all queries
-    public static final String ORDER_FIELDS =
+public with sharing class OrderDL_Util {
+    // Standard field list for all queries
+    public static final String BASE_FIELDS = 
         'OrderRefNumber__c, CustomerName__c, Revenue__c, Quantity__c, ' +
         'OrderPODate__c, OrderCreateDate__c, OrderStatus__c, ' +
-        'Requestor__c, OEM__c, Vendor__c, Modality__c';
+        'Vendor__c, OEM__c, Modality__c';
 
-    public static String buildBaseQuery() {
-        return 'SELECT ' + ORDER_FIELDS + ' FROM Realistic_OrderLine_Datacsv__dlm ';
+    public class Tot {
+        public Decimal revenue = 0;
+        public Integer qty = 0;
+        public Integer count = 0;
     }
 
-    // Utility: format order results into markdown
+    public static Map<String, Tot> rollup(List<Realistic_OrderLine_Datacsv__dlm> rows, String groupByField) {
+        Map<String, Tot> totals = new Map<String, Tot>();
+        for (Realistic_OrderLine_Datacsv__dlm r : rows) {
+            String key;
+            if (groupByField == 'Customer') key = r.CustomerName__c;
+            else if (groupByField == 'Vendor') key = r.Vendor__c;
+            else if (groupByField == 'OEM') key = r.OEM__c;
+            else if (groupByField == 'Modality') key = r.Modality__c;
+            else key = 'Other';
+
+            if (!totals.containsKey(key)) totals.put(key, new Tot());
+            Tot t = totals.get(key);
+            t.revenue += r.Revenue__c;
+            t.qty += (r.Quantity__c == null ? 0 : r.Quantity__c.intValue());
+            t.count++;
+        }
+        return totals;
+    }
+
     public static String fmtOrdersTable(List<Realistic_OrderLine_Datacsv__dlm> rows, String title) {
-        if (rows.isEmpty()) {
-            return '❌ No matching orders found.';
+        String out = '## ' + title + '\n';
+        out += 'OrderRef | Customer | Status | Revenue | OEM | Vendor | Modality | PO Date\n';
+        out += '--- | --- | --- | --- | --- | --- | --- | ---\n';
+        for (Realistic_OrderLine_Datacsv__dlm r : rows) {
+            out += r.OrderRefNumber__c + ' | ' + r.CustomerName__c + ' | ' +
+                   r.OrderStatus__c + ' | $' + r.Revenue__c + ' | ' +
+                   r.OEM__c + ' | ' + r.Vendor__c + ' | ' + r.Modality__c + ' | ' +
+                   r.OrderPODate__c + '\n';
         }
+        return out;
+    }
 
-        String header = '## ' + title + '\n' +
-                        'OrderRef | Customer | Status | Revenue | Date | OEM | Vendor | Modality\n' +
-                        '--- | --- | --- | --- | --- | --- | --- | ---\n';
-
-        String body = '';
-        for (Realistic_OrderLine_Datacsv__dlm row : rows) {
-            body += row.OrderRefNumber__c + ' | ' +
-                    row.CustomerName__c + ' | ' +
-                    row.OrderStatus__c + ' | $' +
-                    row.Revenue__c + ' | ' +
-                    String.valueOf(row.OrderPODate__c) + ' | ' +
-                    row.OEM__c + ' | ' +
-                    row.Vendor__c + ' | ' +
-                    row.Modality__c + '\n';
+    public static String fmtRollupTable(Map<String, Tot> totals, String title, String groupField) {
+        String out = '## ' + title + '\n';
+        out += groupField + ' | Orders | Qty | Revenue\n';
+        out += '--- | --- | --- | ---\n';
+        for (String key : totals.keySet()) {
+            Tot t = totals.get(key);
+            out += key + ' | ' + t.count + ' | ' + t.qty + ' | $' + t.revenue + '\n';
         }
-        return header + body;
+        return out;
     }
 }
