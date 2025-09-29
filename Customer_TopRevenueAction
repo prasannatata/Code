@@ -10,13 +10,13 @@ public with sharing class Customer_RevenueTrendAction {
     }
 
     @InvocableMethod(label='Customer Revenue Trend' description='Show revenue trends for a specific customer')
-    public static List<Response> run(List<Request> requests) {
+    public static List<Response> run(List<Request> reqs) {
         List<Response> results = new List<Response>();
-        
-        for (Request r : requests) {
+
+        for (Request r : reqs) {
             Response res = new Response();
 
-            // Build query dynamically, FIXED with escapeSingleQuotes
+            // FIXED: Use escapeSingleQuotes instead of :r.customerName
             String query = 'SELECT ' + OrderDL_Util.BASE_FIELDS +
                            ' FROM Realistic_OrderLine_Datacsv__dlm ' +
                            ' WHERE CustomerName__c = \'' + String.escapeSingleQuotes(r.customerName) + '\'';
@@ -31,6 +31,7 @@ public with sharing class Customer_RevenueTrendAction {
 
             results.add(res);
         }
+
         return results;
     }
 }
@@ -38,8 +39,8 @@ public with sharing class Customer_RevenueTrendAction {
 
 List<Customer_RevenueTrendAction.Request> reqs = new List<Customer_RevenueTrendAction.Request>();
 Customer_RevenueTrendAction.Request r = new Customer_RevenueTrendAction.Request();
-r.customerName = 'NYU Langone';  // make sure this matches a record in your CSV/object
+r.customerName = 'NYU Langone';  // replace with a name from your CSV
 reqs.add(r);
 
 List<Customer_RevenueTrendAction.Response> res = Customer_RevenueTrendAction.run(reqs);
-System.debug('>>> Customer Revenue Trend: ' + res[0].result);
+System.debug('>>> Revenue Trend Result: ' + res[0].result);
