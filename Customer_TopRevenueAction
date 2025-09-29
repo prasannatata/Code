@@ -31,3 +31,15 @@ public with sharing class Customer_TopRevenueAction {
         return results;
     }
 }
+
+// Test top 5 customers
+List<Customer_TopRevenueAction.Request> reqs = new List<Customer_TopRevenueAction.Request>();
+Customer_TopRevenueAction.Request r = new Customer_TopRevenueAction.Request();
+r.topN = 5;   // change as needed (default is 10 if null)
+reqs.add(r);
+
+List<Customer_TopRevenueAction.Response> res = Customer_TopRevenueAction.run(reqs);
+for (Customer_TopRevenueAction.Response rr : res) {
+    System.debug('RESULT => ' + rr.result);
+}
+
