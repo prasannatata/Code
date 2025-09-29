@@ -4,7 +4,7 @@ public with sharing class Customer_TopRevenueAction {
     public class Request {
         @InvocableVariable public Integer year;       // optional
         @InvocableVariable public Integer quarter;    // optional
-        @InvocableVariable public Integer limit;      // optional
+        @InvocableVariable public Integer maxResults; // ✅ renamed from 'limit'
     }
 
     // Response wrapper
@@ -27,10 +27,10 @@ public with sharing class Customer_TopRevenueAction {
 
         Request req = requests[0];
 
-        // ✅ Use req.year, req.quarter, req.limit (not plain year/quarter/limit)
+        // Use req.year, req.quarter, req.maxResults
         Integer targetYear    = (req.year != null) ? req.year : Date.today().year();
-        Integer targetQuarter = req.quarter; 
-        Integer maxLimit      = (req.limit != null && req.limit > 0) ? req.limit : 5;
+        Integer targetQuarter = req.quarter;
+        Integer maxLimit      = (req.maxResults != null && req.maxResults > 0) ? req.maxResults : 5;
 
         Date startDate;
         Date endDate;
@@ -51,25 +51,21 @@ public with sharing class Customer_TopRevenueAction {
                 endDate   = Date.newInstance(targetYear, 12, 31);
             }
         } else {
-            // Full year if quarter is not provided
+            // Full year
             startDate = Date.newInstance(targetYear, 1, 1);
             endDate   = Date.newInstance(targetYear, 12, 31);
         }
 
-        // ✅ Aggregate query with proper field API names from your datastream
+        // Query Data
         List<AggregateResult> aggResults = [
-            SELECT CustomerName__c customer,
-                   COUNT(Id) orders,
-                   SUM(Revenue__c) revenue
+            SELECT CustomerName__c customer, COUNT(Id) orders, SUM(Revenue__c) revenue
             FROM Realistic_OrderLine_Datacsv__dlm
-            WHERE OrderPODate__c >= :startDate
-              AND OrderPODate__c <= :endDate
+            WHERE OrderCreateDate__c >= :startDate AND OrderCreateDate__c <= :endDate
             GROUP BY CustomerName__c
             ORDER BY SUM(Revenue__c) DESC
             LIMIT :maxLimit
         ];
 
-        // Map to Result wrapper
         for (AggregateResult ar : aggResults) {
             results.add(new Result(
                 (String) ar.get('customer'),
@@ -81,20 +77,13 @@ public with sharing class Customer_TopRevenueAction {
         return results;
     }
 }
-
-
-List<Customer_TopRevenueAction.Request> reqList = new List<Customer_TopRevenueAction.Request>();
-
+List<Customer_TopRevenueAction.Request> reqs = new List<Customer_TopRevenueAction.Request>();
 Customer_TopRevenueAction.Request r = new Customer_TopRevenueAction.Request();
 r.year = 2025;
-r.quarter = 1;   // Q1
-r.limit = 5;     // top 5
-reqList.add(r);
+r.quarter = 1;
+r.maxResults = 5; // ✅ updated field
+reqs.add(r);
 
-List<Customer_TopRevenueAction.Result> results = Customer_TopRevenueAction.run(reqList);
+List<Customer_TopRevenueAction.Result> results = Customer_TopRevenueAction.run(reqs);
 
-for (Customer_TopRevenueAction.Result res : results) {
-    System.debug('Customer: ' + res.customer +
-                 ' | Orders: ' + res.orders +
-                 ' | Revenue: ' + res.revenue);
-}
+System.debug(results);
