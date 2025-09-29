@@ -1,7 +1,7 @@
 public with sharing class Customer_TopRevenueAction {
     public class Request {
         @InvocableVariable(required=false)
-        public Integer limitSize;   // Optional: how many top customers to return
+        public Integer limitSize;   // optional: number of customers to return
     }
 
     public class Response {
@@ -15,10 +15,9 @@ public with sharing class Customer_TopRevenueAction {
 
         for (Request r : reqs) {
             Response res = new Response();
-
             Integer limitValue = (r.limitSize != null && r.limitSize > 0) ? r.limitSize : 10;
 
-            // ✅ Dynamic SOQL with GROUP BY
+            // ✅ Explicit aliasing for SUM and COUNT
             String query =
                 'SELECT CustomerName__c, SUM(Revenue__c) totalRevenue, COUNT(Id) orderCount ' +
                 'FROM Realistic_OrderLine_Datacsv__dlm ' +
@@ -51,9 +50,9 @@ public with sharing class Customer_TopRevenueAction {
 List<Customer_TopRevenueAction.Request> reqs = new List<Customer_TopRevenueAction.Request>();
 
 Customer_TopRevenueAction.Request r = new Customer_TopRevenueAction.Request();
-r.limitSize = 5;   // Top 5 customers
+r.limitSize = 5; // get top 5
 reqs.add(r);
 
 List<Customer_TopRevenueAction.Response> res = Customer_TopRevenueAction.run(reqs);
 
-System.debug('>>> Top Customers by Revenue:\n' + res[0].result);
+System.debug('>>> Top Revenue Customers:\n' + res[0].result);
