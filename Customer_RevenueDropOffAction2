@@ -246,3 +246,123 @@ System.debug('Summary: ' + responses3[0].summaryText);
 System.debug('Period 1: ' + responses3[0].period1Label);
 System.debug('Period 2: ' + responses3[0].period2Label);
 System.debug('Customer Count: ' + responses3[0].customerNames.size());
+
+
+
+
++++++++++++++++
++++++++++++++++++++++++++++
++++++++++++++++++++++++++++++++++++++
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Part 3: Agent Builder Configuration
+A. Create New Topic
+
+Go to Agent Builder
+Click Topics → New Topic
+Fill in:
+
+Name: Revenue Drop-Off Analysis
+API Name: Revenue_DropOff_Analysis
+Description: Analyzes revenue declines between time periods and identifies customers with reduced orders
+
+
+
+B. Add the Action to Topic
+
+In the topic, go to Actions tab
+Click New Action
+Select Apex Action
+Choose: Customer_RevenueDropOffAction
+Configure inputs (leave all optional so agent can calculate dates)
+
+C. Configure Action Outputs
+For each output, configure:
+1. Summary Text
+
+Show in conversation: Checked
+Output Rendering: Text
+
+2. Customer Names, Period 1 Revenue, Period 2 Revenue, Drop Amount, Drop Percentage
+
+Show in conversation: Unchecked (will show via LWC)
+
+3. Period 1 Label, Period 2 Label
+
+Show in conversation: Unchecked
+
+D. Add LWC Component Output
+
+In the action configuration, click Add Output
+Select Component
+Choose component: c:revenueDropOffTable
+Map properties:
+
+customerNames → Customer Names
+period1Revenue → Period 1 Revenue
+period2Revenue → Period 2 Revenue
+dropAmount → Drop Amount
+dropPercentage → Drop Percentage
+period1Label → Period 1 Label
+period2Label → Period 2 Label
+summaryText → Summary Text
+
+
+
+E. Topic Instructions
+Paste this in the Instructions field:
+This topic handles revenue decline and drop-off analysis queries.
+
+WHEN TO USE:
+- User asks about declining revenue, drop-offs, or customers ordering less
+- Queries about period-over-period revenue comparisons
+- Questions like "who stopped ordering" or "revenue decreased"
+
+ACTION USAGE:
+Call Customer_RevenueDropOffAction with date parameters:
+
+Date Calculation Rules:
+- Q1 = Jan 1 to Mar 31
+- Q2 = Apr 1 to Jun 30
+- Q3 = Jul 1 to Sep 30
+- Q4 = Oct 1 to Dec 31
+
+Examples:
+"declining revenue in Q1" → period1Start=2024-10-01, period1End=2024-12-31, period2Start=2025-01-01, period2End=2025-03-31
+"revenue drop last 6 months" → Calculate 12-6 months ago vs 6 months-today
+"this quarter vs last quarter" → Leave dates empty (auto-calculates)
+
+IMPORTANT: Always set period1 (older/baseline) before period2 (newer/comparison).
+
+OUTPUT:
+The action returns data that displays automatically as a Lightning Data Table via the revenueDropOffTable component. 
+
+After showing the table:
+1. Highlight the biggest drop customer
+2. Note customers with $0 in period 2
+3. Suggest: "Would you like me to create follow-up tasks for these customers?"
+F. Example User Inputs
+Add these examples:
+"declining revenue in Q1"
+"which customers had revenue drop-off?"
+"revenue decline last 6 months"
+"compare Q2 vs Q1 revenue"
+"who stopped ordering this quarter?"
+"customers with reduced purchases"
+Part 4: What to Update Summary
+Files to Update/Create:
+
+Apex Class: Customer_RevenueDropOffAction - Updated with new Response structure
+LWC Files: Already created in previous step
+Agent Builder: New topic configuration
+
+Deployment Steps:
+
+Deploy updated Apex class
+Verify LWC is deployed
+Create new topic in Agent Builder
+Configure action with LWC component output
+Add topic instructions and examples
+Activate agent
+
+Test Query: "declining revenue in last 6 months"
+Expected Result: Lightning Data Table showing customers with revenue decline, sortable columns, and summary text above the table.RetryClaude can make mistakes. Please double-check responses.
