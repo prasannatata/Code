@@ -1,62 +1,77 @@
 public with sharing class Customer_TopRevenueAction {
-    public class Request {
-        @InvocableVariable(required=false)
-        public Integer limitSize;
-    }
-
-    public class Response {
-        @InvocableVariable
-        public String result;
-    }
-
-    @InvocableMethod(label='Top Revenue Customers' description='List top customers by revenue')
-    public static List<Response> run(List<Request> reqs) {
-        List<Response> results = new List<Response>();
-
-        for (Request r : reqs) {
-            Response res = new Response();
-            Integer limitValue = (r.limitSize != null && r.limitSize > 0) ? r.limitSize : 10;
-
-            // 👇 Use aliases in SOQL
-            String query =
-                'SELECT CustomerName__c custName, SUM(Revenue__c) sumRevenue, COUNT(Id) orderCount ' +
-                'FROM Realistic_OrderLine_Datacsv__dlm ' +
-                'GROUP BY CustomerName__c ' +
-                'ORDER BY SUM(Revenue__c) DESC ' +
-                'LIMIT ' + limitValue;
-
-            List<AggregateResult> rows = Database.query(query);
-
-            if (rows.isEmpty()) {
-                res.result = '❌ No customer revenue data found.';
-            } else {
-                String table = 'Customer | Orders | Total Revenue\n';
-                table += '---|---|---\n';
-
-                for (AggregateResult ar : rows) {
-                    String custName = (String)ar.get('custName');
-                    String orderCount = String.valueOf(ar.get('orderCount'));
-                    Decimal revenue = (Decimal)ar.get('sumRevenue'); // ✅ alias used here
-
-                    table += custName + ' | ' + orderCount + ' | $' + revenue.setScale(2) + '\n';
-                }
-
-                res.result = table;
+    
+    @InvocableMethod(label='Get Top Customers by Revenue')
+    public static List<Result> run(List<Request> requests) {
+        List<Result> results = new List<Result>();
+        
+        for (Request req : requests) {
+            Integer yearVal = (req.year != null) ? req.year : Date.today().year();
+            Integer quarterVal = req.quarter;
+            Integer limitVal = (req.limit != null) ? req.limit : 5;
+            
+            // Build SOQL dynamically
+            String soql = 'SELECT CustomerName__c customer, COUNT(Id) orders, SUM(Revenue__c) revenue ' +
+                          'FROM Order__c ' +
+                          'WHERE CALENDAR_YEAR(OrderDate__c) = :yearVal ';
+            
+            if (quarterVal != null) {
+                soql += 'AND CALENDAR_QUARTER(OrderDate__c) = :quarterVal ';
             }
-
-            results.add(res);
+            
+            soql += 'GROUP BY CustomerName__c ' +
+                    'ORDER BY revenue DESC ' +
+                    'LIMIT :limitVal';
+            
+            List<AggregateResult> aggResults = Database.query(soql);
+            
+            for (AggregateResult ar : aggResults) {
+                results.add(new Result(
+                    (String)ar.get('customer'),
+                    (Integer)ar.get('orders'),
+                    (Decimal)ar.get('revenue')
+                ));
+            }
         }
-
         return results;
+    }
+    
+    public class Request {
+        @InvocableVariable(label='Year') public Integer year;
+        @InvocableVariable(label='Quarter') public Integer quarter;
+        @InvocableVariable(label='Limit') public Integer limit;
+    }
+    
+    public class Result {
+        @InvocableVariable(label='Customer') public String customer;
+        @InvocableVariable(label='Orders') public Integer orders;
+        @InvocableVariable(label='Total Revenue') public Decimal revenue;
+        
+        public Result(String c, Integer o, Decimal r) {
+            customer = c;
+            orders = o;
+            revenue = r;
+        }
     }
 }
 
-List<Customer_TopRevenueAction.Request> reqs = new List<Customer_TopRevenueAction.Request>();
 
-Customer_TopRevenueAction.Request r = new Customer_TopRevenueAction.Request();
-r.limitSize = 5; // top 5
-reqs.add(r);
+// Example 1: Get top 5 customers for Q1 2025
+List<Customer_TopRevenueAction.Request> reqs1 = new List<Customer_TopRevenueAction.Request>();
+Customer_TopRevenueAction.Request r1 = new Customer_TopRevenueAction.Request();
+r1.year = 2025;
+r1.quarter = 1;
+r1.limit = 5;
+reqs1.add(r1);
 
-List<Customer_TopRevenueAction.Response> res = Customer_TopRevenueAction.run(reqs);
+List<Customer_TopRevenueAction.Result> res1 = Customer_TopRevenueAction.run(reqs1);
+System.debug('### Top 5 Customers in Q1 2025: ' + res1);
 
-System.debug('>>> Top Revenue Customers:\n' + res[0].result);
+// Example 2: Get top 5 customers for all of 2025
+List<Customer_TopRevenueAction.Request> reqs2 = new List<Customer_TopRevenueAction.Request>();
+Customer_TopRevenueAction.Request r2 = new Customer_TopRevenueAction.Request();
+r2.year = 2025;
+r2.limit = 5;
+reqs2.add(r2);
+
+List<Customer_TopRevenueAction.Result> res2 = Customer_TopRevenueAction.run(reqs2);
+System.debug('### Top 5 Customers in 2025: ' + res2);
