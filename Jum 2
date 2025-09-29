@@ -12,3 +12,51 @@
         </targetConfig>
     </targetConfigs>
 </LightningComponentBundle>
+
+
+
+
+
+
+
+import { LightningElement, api } from 'lwc';
+
+export default class RevenueDropOffTable extends LightningElement {
+    @api value; // Agentforce will pass DropOffWrapper list here
+
+    columns = [
+        { label: 'Customer', fieldName: 'customerName' },
+        { label: 'Period 1 Revenue', fieldName: 'period1Revenue' },
+        { label: 'Period 2 Revenue', fieldName: 'period2Revenue' },
+        { label: 'Drop Amount', fieldName: 'dropAmount' },
+        { label: 'Drop %', fieldName: 'dropPercentage' }
+    ];
+
+    get rows() {
+        let out = [];
+        if (this.value && Array.isArray(this.value)) {
+            out = this.value.map(item => ({
+                customerName: item.customerName,
+                period1Revenue: item.period1Revenue,
+                period2Revenue: item.period2Revenue,
+                dropAmount: item.dropAmount,
+                dropPercentage: item.dropPercentage
+            }));
+        }
+        return out;
+    }
+}
+
+
+
+<template>
+    <lightning-card title="Revenue Drop-Off Analysis" icon-name="standard:account">
+        <lightning-datatable
+            data={rows}
+            columns={columns}
+            key-field="customerName"
+            hide-checkbox-column>
+        </lightning-datatable>
+    </lightning-card>
+</template>
+
