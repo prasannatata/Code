@@ -55,3 +55,26 @@ public class CustomerAction {
         return outputs;
     }
 }
+
+
+// Build a test request
+CustomerAction.Request req = new CustomerAction.Request();
+req.topN = 5; // ask top 5 customers
+req.filtersJson = JSON.serialize(new Map<String,Object>{
+    'Year' => '2025',
+    'Quarter' => '1'
+});
+
+// Call your class
+List<CustomerAction.Request> requests = new List<CustomerAction.Request>{ req };
+List<CustomerAction.Result> results = CustomerAction.run(requests);
+
+// Log outputs
+for (CustomerAction.Result r : results) {
+    System.debug('===== SUMMARY JSON =====');
+    System.debug(r.summaryJson);
+
+    System.debug('===== META JSON =====');
+    System.debug(r.metaJson);
+}
+
