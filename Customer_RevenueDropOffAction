@@ -358,3 +358,143 @@ Example response:
 | NYU Langone | $2,917 | $0 | $2,917 | 100% |
 
 Stanford Health and NYU Langone had NO orders in Q1 - this needs immediate attention. Would you like me to create follow-up tasks?"
+
+
+
+
+
+
+
+
+
+
+
+
+
+++++++++++
+========
+Looking at your agent instructions, here's what's **missing** for proper table rendering:
+
+## Missing Elements
+
+### 1. **Revenue Drop-Off Action Mapping**
+Your instructions mention drop-off detection in the scope but don't map it to the action:
+
+Add this under **Query → Apex Mapping** section:
+
+```
+Revenue Drop-Off Analysis
+• Revenue decline between periods → Customer_RevenueDropOffAction.run(period1Start={date}, period1End={date}, period2Start={date}, period2End={date})
+• "Declining revenue in Q1" → Calculate Q4 2024 and Q1 2025 dates, then call action
+• "Revenue drop last 6 months" → Calculate date ranges for past 6 months vs previous 6 months
+```
+
+### 2. **Date Calculation Logic**
+Your instructions don't teach the agent HOW to convert natural language to dates:
+
+Add this section:
+
+```
+**Date Parsing Rules:**
+
+When user mentions periods, convert to exact dates:
+- Q1: January 1 - March 31
+- Q2: April 1 - June 30
+- Q3: July 1 - September 30
+- Q4: October 1 - December 31
+- "Last 6 months": From 6 months ago to today
+- "This quarter": Current quarter dates
+- "Last quarter": Previous quarter dates
+
+For drop-off queries, ALWAYS compare older period (period1) vs newer period (period2).
+
+Example: "Q1 declining revenue"
+→ period1Start=2024-10-01, period1End=2024-12-31 (Q4 2024)
+→ period2Start=2025-01-01, period2End=2025-03-31 (Q1 2025)
+```
+
+### 3. **Specific Drop-Off Formatting Instructions**
+While you have general table formatting rules, add specific guidance for drop-off results:
+
+Add this to your **Formatting** section:
+
+```
+**For Revenue Drop-Off Results:**
+
+The Customer_RevenueDropOffAction returns text data that MUST be converted to a table.
+
+Required format:
+| Customer | [Period 1 Label] | [Period 2 Label] | Drop Amount | Drop % |
+|----------|------------------|------------------|-------------|--------|
+| [data]   | $X,XXX.XX       | $X,XXX.XX       | $X,XXX.XX   | XX.X%  |
+
+Before the table, include:
+- Summary: "Found X customers with revenue decline between [period1] and [period2]"
+- Total impact: "Total revenue lost: $XXX,XXX"
+
+After the table, include:
+- Key insight: Highlight biggest drop or customers with $0 in period 2
+- Action prompt: "Would you like me to create follow-up tasks for these customers?"
+
+NEVER show the raw text output - always parse and reformat.
+```
+
+### 4. **Example User Inputs**
+Add drop-off examples to your **Example User Input** section:
+
+```
+"Show declining revenue in Q1"
+"Which customers had revenue drop-off?"
+"Compare Q2 vs Q1 revenue"
+"Customers ordering less last 6 months"
+"Revenue decline between January and March"
+```
+
+---
+
+## Complete Updated Instructions Section
+
+Here's the consolidated addition to put in your instructions:
+
+```
+**Revenue Drop-Off Analysis**
+
+Query → Action Mapping:
+• Revenue decline queries → Customer_RevenueDropOffAction.run(period1Start, period1End, period2Start, period2End, topN)
+• If no specific periods mentioned → Leave dates empty (defaults to current vs previous quarter)
+• If specific periods mentioned → Calculate exact dates using rules below
+
+Date Calculation Rules:
+• Q1 = Jan 1 - Mar 31, Q2 = Apr 1 - Jun 30, Q3 = Jul 1 - Sep 30, Q4 = Oct 1 - Dec 31
+• "Last X months" = X months ago to today vs previous X months
+• Always set period1 (older/baseline) before period2 (newer/comparison)
+
+Output Formatting (CRITICAL):
+The action returns TEXT that you MUST convert to a markdown table:
+
+Required structure:
+1. Summary: "Found X customers with revenue decline between [P1] and [P2]. Total lost: $XXX,XXX"
+2. Table:
+
+| Customer | [Period 1] | [Period 2] | Drop Amount | Drop % |
+|----------|------------|------------|-------------|--------|
+| Stanford Health | $3,517.00 | $0.00 | $3,517.00 | 100.0% |
+
+3. Insight: "Stanford Health had NO orders in [Period 2]"
+4. Action: "Create follow-up tasks for these customers?"
+
+Examples:
+• "declining revenue in Q1" → period1=Q4 2024, period2=Q1 2025
+• "revenue drop last 6 months" → Calculate rolling 6-month periods
+• "Q2 vs Q1" → period1=Q1 dates, period2=Q2 dates
+```
+
+---
+
+This gives the agent the specific instructions it needs to:
+1. Know when to call the drop-off action
+2. Calculate dates correctly
+3. **Force table formatting** on the text output
+4. Add proper context and insights
+
+Add these sections to your agent instructions and test again with "declining revenue in Q1".
