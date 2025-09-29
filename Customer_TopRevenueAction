@@ -71,30 +71,31 @@ public with sharing class Customer_TopRevenueAction {
     }
 }
 
+// Create a request for Q1 2025
+Customer_TopRevenueAction.Request req1 = new Customer_TopRevenueAction.Request();
+req1.year = 2025;
+req1.quarter = 1;
+req1.limit = 5;
 
-// Top 5 customers in Q1 2025
-Customer_TopRevenueAction.Request r1 = new Customer_TopRevenueAction.Request();
-r1.year = 2025;
-r1.quarter = 1;
-r1.limit = 5;
-
-List<Customer_TopRevenueAction.Request> reqs1 = new List<Customer_TopRevenueAction.Request>{ r1 };
-List<Customer_TopRevenueAction.Result> res1 = Customer_TopRevenueAction.run(reqs1);
+List<Customer_TopRevenueAction.Request> reqs1 = new List<Customer_TopRevenueAction.Request>{ req1 };
+List<Customer_TopRevenueAction.Result> results1 = Customer_TopRevenueAction.run(reqs1);
 
 System.debug('### Top 5 Customers in Q1 2025 ###');
-for (Customer_TopRevenueAction.Result r : res1) {
+for (Customer_TopRevenueAction.Result r : results1) {
     System.debug(r.customer + ' | Orders: ' + r.orders + ' | Revenue: ' + r.revenue);
 }
 
-// Top 5 customers for full 2025
-Customer_TopRevenueAction.Request r2 = new Customer_TopRevenueAction.Request();
-r2.year = 2025;
-r2.limit = 5;
+// Create a request for full year 2025
+Customer_TopRevenueAction.Request req2 = new Customer_TopRevenueAction.Request();
+req2.year = 2025;
+req2.limit = 5;
 
-List<Customer_TopRevenueAction.Request> reqs2 = new List<Customer_TopRevenueAction.Request>{ r2 };
-List<Customer_TopRevenueAction.Result> res2 = Customer_TopRevenueAction.run(reqs2);
+List<Customer_TopRevenueAction.Request> reqs2 = new List<Customer_TopRevenueAction.Request>{ req2 };
+List<Customer_TopRevenueAction.Result> results2 = Customer_TopRevenueAction.run(reqs2);
 
-System.debug('### Top 5 Customers for 2025 ###');
-for (Customer_TopRevenueAction.Result r : res2) {
+System.debug('### Top 5 Customers in Full Year 2025 ###');
+for (Customer_TopRevenueAction.Result r : results2) {
     System.debug(r.customer + ' | Orders: ' + r.orders + ' | Revenue: ' + r.revenue);
+}
+
 }
