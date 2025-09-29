@@ -46,3 +46,17 @@ public class Order_GetByCompositeFiltersAction {
         return results;
     }
 }
+
++++++++++++++++++
+// Test orders by composite filters (Status + OEM + Requestor + Date)
+List<Order_GetByCompositeFiltersAction.Request> reqs = new List<Order_GetByCompositeFiltersAction.Request>();
+Order_GetByCompositeFiltersAction.Request r = new Order_GetByCompositeFiltersAction.Request();
+r.status = 'Pending';
+r.oemName = 'Canon';
+r.requestor = 'David Davis'; // must exist in dataset
+r.poDateBefore = Date.newInstance(2025, 6, 30); // before June 30, 2025
+reqs.add(r);
+
+List<Order_GetByCompositeFiltersAction.Response> res = Order_GetByCompositeFiltersAction.run(reqs);
+System.debug('>>> Composite Filter Orders: ' + res[0].result);
+
