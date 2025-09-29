@@ -1,6 +1,5 @@
 public with sharing class Customer_TopRevenueAction {
     
-    // Input
     public class Request {
         @InvocableVariable(label='Year' required=false)
         public Integer year;
@@ -17,32 +16,42 @@ public with sharing class Customer_TopRevenueAction {
         @InvocableVariable(label='Customer Name Filter' required=false)
         public String customerNameFilter;
     }
-
-    // Output Row
-    public class Row {
-        @InvocableVariable(label='Customer') public String customer;
-        @InvocableVariable(label='Parent Customer') public String parentCustomer;
-        @InvocableVariable(label='Total Orders') public Integer orders;
-        @InvocableVariable(label='Revenue') public Decimal revenue;
-        @InvocableVariable(label='Heading') public String heading;
-        @InvocableVariable(label='Error Message') public String errorMessage;
+    
+    public class Result {
+        @InvocableVariable(label='Result JSON')
+        public String resultJson;
+        
+        @InvocableVariable(label='Heading')
+        public String heading;
+        
+        @InvocableVariable(label='Error Message')
+        public String errorMessage;
     }
     
-    @InvocableMethod(label='Get Top Customers by Revenue')
-    public static List<Row> run(List<Request> requests) {
-        List<Row> results = new List<Row>();
-
-        if (requests == null || requests.isEmpty()) {
-            return errorOutput('No request provided');
-        }
-        
-        Request req = requests[0];
+    @InvocableMethod(
+        label='Get Top Customers by Revenue' 
+        description='Returns top customers by revenue with flexible filtering'
+    )
+    public static List<Result> run(List<Request> requests) {
+        List<Result> outputs = new List<Result>();
+        Result res = new Result();
         
         try {
+            if (requests == null || requests.isEmpty()) {
+                res.errorMessage = 'No request provided.';
+                outputs.add(res);
+                return outputs;
+            }
+            
+            Request req = requests[0];
+            
             Integer year = (req.year != null) ? req.year : Date.today().year();
             Integer quarter = req.quarter;
-            Integer limitSize = (req.limitSize != null && req.limitSize > 0) ? req.limitSize : 5;
-
+            Integer limitSize = (req.limitSize != null && req.limitSize > 0) ? req.limitSize : 10;
+            Decimal minRevenue = req.minRevenue;
+            String customerFilter = req.customerNameFilter;
+            
+            // Date range
             Date startDate = Date.newInstance(year, 1, 1);
             Date endDate = Date.newInstance(year, 12, 31);
             
@@ -53,74 +62,97 @@ public with sharing class Customer_TopRevenueAction {
                 endDate = Date.newInstance(year, endMonth, Date.daysInMonth(year, endMonth));
             }
             
-            String heading = 'Top ' + limitSize + ' customers by revenue in ' + (quarter != null ? 'Q' + quarter + ' ' : '') + year;
-            
-            String soql = 
-                'SELECT CustomerName__c, ParentCustomerName__c, COUNT(Id) totalOrders, SUM(Revenue__c) totalRevenue ' +
-                'FROM Realistic_OrderLine_Datacsv__dlm ' +
-                'WHERE OrderCreateDate__c >= :startDate AND OrderCreateDate__c <= :endDate ' +
-                'GROUP BY CustomerName__c, ParentCustomerName__c ' +
-                'ORDER BY SUM(Revenue__c) DESC NULLS LAST ' +
-                'LIMIT :limitSize';
+            // Build query
+            String soql = buildQuery(startDate, endDate, limitSize, minRevenue, customerFilter);
+            System.debug('Executing SOQL: ' + soql);
             
             List<AggregateResult> ars = Database.query(soql);
             
+            // Convert results into JSON list
+            List<Map<String, Object>> jsonResults = new List<Map<String, Object>>();
             for (AggregateResult ar : ars) {
-                Row r = new Row();
-                r.customer = (String)ar.get('CustomerName__c');
-                r.parentCustomer = (String)ar.get('ParentCustomerName__c');
-                r.orders = (Integer)ar.get('totalOrders');
-                r.revenue = (Decimal)ar.get('totalRevenue');
-                r.heading = heading;
-                results.add(r);
+                Map<String, Object> row = new Map<String, Object>();
+                row.put('Customer', (String)ar.get('CustomerName__c'));
+                row.put('ParentCustomer', (String)ar.get('ParentCustomerName__c'));
+                row.put('Orders', (Integer)ar.get('totalOrders'));
+                row.put('Revenue', (Decimal)ar.get('totalRevenue'));
+                jsonResults.add(row);
             }
             
-            if (results.isEmpty()) {
-                Row r = new Row();
-                r.heading = heading;
-                r.errorMessage = 'No data found for the criteria.';
-                results.add(r);
+            res.resultJson = JSON.serializePretty(jsonResults);
+            res.heading = buildHeading(year, quarter, limitSize);
+            
+            if (jsonResults.isEmpty()) {
+                res.errorMessage = 'No data found for the specified criteria.';
             }
             
         } catch (Exception e) {
-            return errorOutput('Error: ' + e.getMessage());
+            res.errorMessage = 'Error: ' + e.getMessage();
         }
         
-        return results;
+        outputs.add(res);
+        return outputs;
     }
     
-    private static List<Row> errorOutput(String msg) {
-        Row r = new Row();
-        r.errorMessage = msg;
-        return new List<Row>{ r };
+    // Build SOQL query
+    private static String buildQuery(
+        Date startDate,
+        Date endDate,
+        Integer limitSize,
+        Decimal minRevenue,
+        String customerFilter
+    ) {
+        String soql = 
+            'SELECT CustomerName__c, ParentCustomerName__c, ' +
+            'COUNT(Id) totalOrders, ' +
+            'SUM(Revenue__c) totalRevenue ' +
+            'FROM Realistic_OrderLine_Datacsv__dlm ' +
+            'WHERE OrderCreateDate__c >= :startDate ' +
+            'AND OrderCreateDate__c <= :endDate ';
+        
+        if (String.isNotBlank(customerFilter)) {
+            String filterPattern = '%' + customerFilter + '%';
+            soql += 'AND CustomerName__c LIKE :filterPattern ';
+        }
+        
+        soql += 'GROUP BY CustomerName__c, ParentCustomerName__c ';
+        
+        if (minRevenue != null && minRevenue > 0) {
+            soql += 'HAVING SUM(Revenue__c) >= :minRevenue ';
+        }
+        
+        soql += 'ORDER BY SUM(Revenue__c) DESC NULLS LAST ' +
+                'LIMIT :limitSize';
+        
+        return soql;
+    }
+    
+    // Heading
+    private static String buildHeading(Integer year, Integer quarter, Integer limitSize) {
+        String heading = 'Top ' + limitSize + ' customers by revenue in ';
+        if (quarter != null) heading += 'Q' + quarter + ' ';
+        heading += year;
+        return heading;
     }
 }
 
 
-// Test script for Customer_TopRevenueAction
-List<Customer_TopRevenueAction.Request> reqList = new List<Customer_TopRevenueAction.Request>();
-
-// Build a test request
+// Build request
 Customer_TopRevenueAction.Request req = new Customer_TopRevenueAction.Request();
-req.year = 2025;          // set year (or leave null to default to current year)
-req.quarter = 1;          // optional, values 1-4
-req.limitSize = 5;        // top N customers
-req.minRevenue = 0;       // optional filter
-req.customerNameFilter = null; // or 'Mayo' to filter
+req.year = 2025;                // test year
+req.quarter = 1;                // Q1
+req.limitSize = 5;              // top 5 customers
+req.minRevenue = 1000;          // optional filter
+req.customerNameFilter = null;  // no name filter
 
-reqList.add(req);
+// Call the Apex action
+List<Customer_TopRevenueAction.Request> reqs = new List<Customer_TopRevenueAction.Request>{ req };
+List<Customer_TopRevenueAction.Result> results = Customer_TopRevenueAction.run(reqs);
 
-// Execute the Apex action
-List<Customer_TopRevenueAction.Row> results = Customer_TopRevenueAction.run(reqList);
-
-// Print results
-System.debug('===== Test Results =====');
-for (Customer_TopRevenueAction.Row r : results) {
-    System.debug('Customer: ' + r.customer);
-    System.debug('Parent: ' + r.parentCustomer);
-    System.debug('Orders: ' + r.orders);
-    System.debug('Revenue: ' + r.revenue);
-    System.debug('Heading: ' + r.heading);
-    System.debug('Error: ' + r.errorMessage);
-    System.debug('---------------------------');
+// Print outputs
+for (Customer_TopRevenueAction.Result res : results) {
+    System.debug('--- TEST RESULT ---');
+    System.debug('Heading: ' + res.heading);
+    System.debug('Result JSON: ' + res.resultJson);
+    System.debug('Error: ' + res.errorMessage);
 }
