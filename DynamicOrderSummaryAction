@@ -1,18 +1,25 @@
 public with sharing class DynamicOrderSummaryAction {
 
+    // -------------------------
     // Request wrapper
+    // -------------------------
     public class Request {
-        @InvocableVariable public Integer year;        // optional
-        @InvocableVariable public Integer quarter;     // optional
-        @InvocableVariable public Integer maxLimit;    // optional (Top N)
-        @InvocableVariable public List<String> groupFields; // dynamic grouping fields
+        @InvocableVariable public Integer year;            // optional
+        @InvocableVariable public Integer quarter;         // optional
+        @InvocableVariable public Integer limit;           // optional (Top N)
+        @InvocableVariable public List<String> groupFields; // e.g. ["CustomerName__c", "Vendor__c"]
     }
 
+    // -------------------------
     // Response wrapper
+    // -------------------------
     public class Result {
         @InvocableVariable public String summaryMarkdown;
     }
 
+    // -------------------------
+    // Main Method
+    // -------------------------
     @InvocableMethod(label='Dynamic Order Summary')
     public static List<Result> run(List<Request> requests) {
         List<Result> outputs = new List<Result>();
@@ -20,49 +27,62 @@ public with sharing class DynamicOrderSummaryAction {
 
         Request req = requests[0];
 
-        // Default values
-        Integer targetYear    = (req.year    != null) ? req.year    : Date.today().year();
-        Integer targetQuarter = req.quarter;
-        Integer topN          = (req.maxLimit != null && req.maxLimit > 0) ? req.maxLimit : 10;
+        // --- Default values ---
+        Integer targetYear    = (req.year != null) ? req.year : Date.today().year();
+        Integer targetQuarter = req.quarter; // if null → full year
+        Integer maxLimit      = (req.limit != null && req.limit > 0) ? req.limit : 10;
 
         List<String> groupFields = (req.groupFields != null && !req.groupFields.isEmpty())
-            ? req.groupFields
-            : new List<String>{ 'CustomerName__c' }; // default grouping
+                                    ? req.groupFields
+                                    : new List<String>{ 'CustomerName__c' };
 
-        // Build date filters
+        // --- Date ranges ---
         Date startDate;
         Date endDate;
 
-        if (targetQuarter != null) {
-            if (targetQuarter == 1) { startDate = Date.newInstance(targetYear, 1, 1);  endDate = Date.newInstance(targetYear, 3, 31); }
-            if (targetQuarter == 2) { startDate = Date.newInstance(targetYear, 4, 1);  endDate = Date.newInstance(targetYear, 6, 30); }
-            if (targetQuarter == 3) { startDate = Date.newInstance(targetYear, 7, 1);  endDate = Date.newInstance(targetYear, 9, 30); }
-            if (targetQuarter == 4) { startDate = Date.newInstance(targetYear, 10, 1); endDate = Date.newInstance(targetYear, 12, 31); }
-        } else {
+        if (targetQuarter == null) {
             startDate = Date.newInstance(targetYear, 1, 1);
+            endDate   = Date.newInstance(targetYear, 12, 31);
+        } else if (targetQuarter == 1) {
+            startDate = Date.newInstance(targetYear, 1, 1);
+            endDate   = Date.newInstance(targetYear, 3, 31);
+        } else if (targetQuarter == 2) {
+            startDate = Date.newInstance(targetYear, 4, 1);
+            endDate   = Date.newInstance(targetYear, 6, 30);
+        } else if (targetQuarter == 3) {
+            startDate = Date.newInstance(targetYear, 7, 1);
+            endDate   = Date.newInstance(targetYear, 9, 30);
+        } else if (targetQuarter == 4) {
+            startDate = Date.newInstance(targetYear, 10, 1);
             endDate   = Date.newInstance(targetYear, 12, 31);
         }
 
-        // Build SOQL dynamically
-        String soql = 'SELECT ' + String.join(groupFields, ', ') + 
+        // --- Build SOQL dynamically ---
+        String soql = 'SELECT ' + String.join(groupFields, ', ') +
                       ', COUNT(Id) totalOrders, SUM(Revenue__c) totalRevenue ' +
-                      'FROM Order__c ' +
+                      'FROM Realistic_OrderLine_Datacsv__dlm ' +
                       'WHERE OrderCreateDate__c >= :startDate AND OrderCreateDate__c <= :endDate ' +
-                      'GROUP BY ' + String.join(groupFields, ', ') + 
+                      'GROUP BY ' + String.join(groupFields, ', ') +
                       ' ORDER BY SUM(Revenue__c) DESC ' +
-                      'LIMIT :topN';
+                      'LIMIT ' + maxLimit;
+
+        System.debug('SOQL Query: ' + soql);
 
         List<AggregateResult> ars = Database.query(soql);
 
-        // Build markdown table
-        String header = '## Order Summary\n\n| ' + String.join(groupFields, ' | ') + ' | Orders | Revenue |\n';
-        String sep    = '|' + String.join(new List<String>{'---'}, ' | ').repeat(groupFields.size()) + ' | --- | --- |\n';
-        String body   = '';
+        // --- Build Markdown table ---
+        String header = '## Order Summary\n\n' + 
+                        String.join(groupFields, ' | ') + ' | Orders | Revenue \n';
+        String sep    = '| ' + String.join(
+                            new List<String>(new List<String>{'---'}).deepClone().repeat(groupFields.size()), 
+                            ' | '
+                        ) + ' | --- | --- \n';
 
+        String body = '';
         for (AggregateResult ar : ars) {
             List<String> row = new List<String>();
-            for (String field : groupFields) {
-                row.add(String.valueOf(ar.get(field)));
+            for (String f : groupFields) {
+                row.add(String.valueOf(ar.get(f)));
             }
             row.add(String.valueOf(ar.get('totalOrders')));
             row.add(String.valueOf(ar.get('totalRevenue')));
@@ -76,13 +96,32 @@ public with sharing class DynamicOrderSummaryAction {
         return outputs;
     }
 }
+
+// Example 1: Top 5 customers in Q1 2025
 List<DynamicOrderSummaryAction.Request> reqs = new List<DynamicOrderSummaryAction.Request>();
 DynamicOrderSummaryAction.Request r = new DynamicOrderSummaryAction.Request();
 r.year = 2025;
 r.quarter = 1;
-r.maxLimit = 5;
-r.groupFields = new List<String>{'CustomerName__c', 'Modality__c'};
+r.limit = 5;
+r.groupFields = new List<String>{ 'CustomerName__c' };
 reqs.add(r);
 
 List<DynamicOrderSummaryAction.Result> res = DynamicOrderSummaryAction.run(reqs);
-System.debug(res[0].summaryMarkdown);
+
+for (DynamicOrderSummaryAction.Result out : res) {
+    System.debug(out.summaryMarkdown);
+}
+
+// Example 2: Top vendors by revenue in full year 2025
+DynamicOrderSummaryAction.Request r2 = new DynamicOrderSummaryAction.Request();
+r2.year = 2025;
+r2.limit = 5;
+r2.groupFields = new List<String>{ 'Vendor__c' };
+reqs.clear();
+reqs.add(r2);
+
+List<DynamicOrderSummaryAction.Result> res2 = DynamicOrderSummaryAction.run(reqs);
+
+for (DynamicOrderSummaryAction.Result out : res2) {
+    System.debug(out.summaryMarkdown);
+}
