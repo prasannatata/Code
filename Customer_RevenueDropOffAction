@@ -261,3 +261,70 @@ List<Customer_RevenueDropOffAction.Response> responses = Customer_RevenueDropOff
 
 System.debug('===== TEST 5: JANUARY vs FEBRUARY 2025 =====');
 System.debug(responses[0].result);
+
+
+
+This output contains a markdown-formatted table showing customers with revenue decline between two periods.
+
+The agent should:
+1. Introduce the comparison periods clearly (e.g., "Comparing Q1 2025 to Q4 2024...")
+2. Summarize key findings before showing the table (e.g., "Found 7 customers with revenue decline, totaling $245K in lost revenue")
+3. Present the table as-is (it's already formatted)
+4. Highlight the biggest drop-off customer
+5. Offer actionable next steps (e.g., "Would you like me to create follow-up tasks for these customers?")
+
+Example presentation:
+"I analyzed revenue between Q4 2024 and Q1 2025. I found 7 customers with declining revenue:
+
+[Table from action result]
+
+The biggest concern is Acme Corp with a $45K drop (36% decline). This might indicate they're reducing orders or switching vendors. Would you like me to create tasks for the sales team to follow up with these accounts?"
+
+
+
+
+
+
+=====
+
+Use this action when users ask about revenue decline, drop-offs, or customers ordering less between any two time periods.
+
+WHEN TO USE:
+- "Which customers had declining revenue in Q1?"
+- "Show revenue drop between [period] and [period]"
+- "Customers with less orders this quarter"
+- "Who stopped ordering or reduced purchases?"
+- "Revenue drop-off analysis"
+- "Compare revenue between [timeframe]"
+
+HOW TO USE:
+1. Parse the user's query to identify the two time periods they want to compare
+2. Convert periods to exact dates:
+   - Q1: January 1 - March 31
+   - Q2: April 1 - June 30
+   - Q3: July 1 - September 30
+   - Q4: October 1 - December 31
+   - "Last 6 months": Calculate 6 months back from today
+   - "This year vs last year": Calculate full year dates
+
+3. Always compare OLDER period first (period1) vs NEWER period (period2)
+   Example: "Q1 revenue drop" means Q4 2024 (period1) → Q1 2025 (period2)
+
+4. If user doesn't specify periods, leave dates EMPTY to auto-compare current vs previous quarter
+
+DATE PARAMETER EXAMPLES:
+Query: "declining revenue in Q1 2025"
+→ period1Start: 2024-10-01, period1End: 2024-12-31 (Q4 2024)
+→ period2Start: 2025-01-01, period2End: 2025-03-31 (Q1 2025)
+
+Query: "revenue drop last 3 months"
+→ Calculate: 3 months ago to today vs 6-3 months ago
+
+Query: "customers ordering less this quarter"
+→ Leave all dates empty (action will auto-calculate)
+
+IMPORTANT:
+- Always specify ALL 4 dates when user mentions specific periods
+- Leave ALL dates empty only when user says "current" or "this quarter" without specifics
+- Period 1 should always be the EARLIER/BASELINE period
+- Period 2 should always be the LATER/COMPARISON period
