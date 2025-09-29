@@ -95,3 +95,54 @@ Perfect 👌 — let’s make this clean and consistent for **all your Apex clas
 ---
 
 Would you like me to also prepare a **mapping table (Topic → Apex Class → Action Name → Instructions)** so you can directly upload/configure in Agent Builder without guessing which Apex class ties to which action?
+
+
+
+
+
+Got it 👍 — you also want **Customer-based** and **Date Range–based** queries in your Agent Actions (just like Vendor / OEM / Status). Let’s add those too, with clear **Agent Action Instructions** and Inputs/Outputs.
+
+---
+
+## 7. 🔹 **Get Orders by Customer**
+
+* **Agent Action Instructions:**
+  `Retrieve all orders associated with a specific customer.`
+
+* **Input (customerName):**
+  `Provide the customer name to filter orders by.`
+
+* **Output (result):**
+  `List of orders filtered by the specified customer.`
+
+---
+
+## 8. 🔹 **Get Orders by Date Range**
+
+* **Agent Action Instructions:**
+  `Fetch all orders placed within a specific date range.`
+
+* **Inputs:**
+
+  * **startDate** → `Enter the start date for the order search.`
+  * **endDate** → `Enter the end date for the order search.`
+
+* **Output (result):**
+  `List of orders created within the given date range.`
+
+---
+
+✅ Now your action coverage looks like this:
+
+* By **Reference Number**
+* By **Status**
+* By **Vendor**
+* By **Modality**
+* By **OEM**
+* By **Customer**
+* By **Date Range**
+* By **Composite Filters** (multi-condition search)
+
+---
+
+Do you want me to consolidate **all 8 actions into a single mapping table (Topic → Apex Class → Inputs/Outputs → Instructions)** so you can configure them cleanly in **Agentforce Builder**?
