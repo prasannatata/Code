@@ -1,0 +1,88 @@
+public with sharing class Customer_RevenueTrendAction {
+    public class Request {
+        @InvocableVariable(label='Year')
+        public Integer year;
+        @InvocableVariable(label='Quarter (1-4)')
+        public Integer quarter;
+    }
+    public class Response {
+        @InvocableVariable(label='Result')
+        public String result;
+    }
+
+    @InvocableMethod(label='Customer Revenue Trend (Quarter vs Last)')
+    public static List<Response> run(List<Request> reqs) {
+        List<Response> results = new List<Response>();
+        for (Request r : reqs) {
+            Response res = new Response();
+
+            if (r.year == null || r.quarter == null) {
+                res.result = '⚠️ Please provide both year and quarter.';
+                results.add(res);
+                continue;
+            }
+
+            Integer prevQuarter = (r.quarter == 1) ? 4 : r.quarter - 1;
+            Integer prevYear    = (r.quarter == 1) ? r.year - 1 : r.year;
+
+            Date currStart = OrderDL_Util.getQuarterStart(r.year, r.quarter);
+            Date currEnd   = OrderDL_Util.getQuarterEnd(r.year, r.quarter);
+            Date prevStart = OrderDL_Util.getQuarterStart(prevYear, prevQuarter);
+            Date prevEnd   = OrderDL_Util.getQuarterEnd(prevYear, prevQuarter);
+
+            // Aggregate current
+            Map<String, Decimal> currRevenue = new Map<String, Decimal>();
+            for (Realistic_OrderLine_Datacsv__dlm o : [
+                SELECT CustomerName__c, Revenue__c 
+                FROM Realistic_OrderLine_Datacsv__dlm
+                WHERE OrderCreateDate__c >= :currStart AND OrderCreateDate__c <= :currEnd
+            ]) {
+                currRevenue.put(o.CustomerName__c, (currRevenue.containsKey(o.CustomerName__c) ? currRevenue.get(o.CustomerName__c) : 0) + o.Revenue__c);
+            }
+
+            // Aggregate previous
+            Map<String, Decimal> prevRevenue = new Map<String, Decimal>();
+            for (Realistic_OrderLine_Datacsv__dlm o : [
+                SELECT CustomerName__c, Revenue__c 
+                FROM Realistic_OrderLine_Datacsv__dlm
+                WHERE OrderCreateDate__c >= :prevStart AND OrderCreateDate__c <= :prevEnd
+            ]) {
+                prevRevenue.put(o.CustomerName__c, (prevRevenue.containsKey(o.CustomerName__c) ? prevRevenue.get(o.CustomerName__c) : 0) + o.Revenue__c);
+            }
+
+            // Compare
+            String output = '## Customers with Revenue Drop (Q' + r.quarter + ' ' + r.year + ' vs Q' + prevQuarter + ' ' + prevYear + ')\n';
+            output += 'Customer | Previous Revenue | Current Revenue | Change\n---|---|---|---\n';
+
+            for (String cust : currRevenue.keySet()) {
+                Decimal curr = currRevenue.get(cust);
+                Decimal prev = prevRevenue.containsKey(cust) ? prevRevenue.get(cust) : 0;
+                if (curr < prev) {
+                    output += cust + ' | $' + prev + ' | $' + curr + ' | ▼ ' + (curr - prev) + '\n';
+                }
+            }
+            res.result = output;
+            results.add(res);
+        }
+        return results;
+    }
+}
+
+++++++++++++
+// ============================================
+// Test Script for Customer_RevenueTrendAction
+// ============================================
+
+// Create request wrapper
+Customer_RevenueTrendAction.Request req = new Customer_RevenueTrendAction.Request();
+req.customerName = 'NYU Langone';   // Change to any customer in your dataset
+req.numQuarters = 4;                // Look back 4 quarters
+
+// Run the action
+List<Customer_RevenueTrendAction.Response> results = Customer_RevenueTrendAction.run(req);
+
+// Debug output
+System.debug('==== Customer_RevenueTrendAction Results ====');
+for (Customer_RevenueTrendAction.Response r : results) {
+    System.debug(r.result);
+}
