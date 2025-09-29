@@ -328,3 +328,33 @@ IMPORTANT:
 - Leave ALL dates empty only when user says "current" or "this quarter" without specifics
 - Period 1 should always be the EARLIER/BASELINE period
 - Period 2 should always be the LATER/COMPARISON period
+
++++++++++++
+++++++++++++
+++++++++++++++++++++++++++++
+This output contains revenue drop-off data in text format.
+
+The agent MUST reformat this data as a proper markdown table before presenting it to the user.
+
+Steps:
+1. Parse the text output from the action
+2. Extract the customer names, revenue values, drop amounts, and percentages
+3. Present as a markdown table with this format:
+
+| Customer | [Period 1] | [Period 2] | Drop Amount | Drop % |
+|----------|------------|------------|-------------|--------|
+| [data]   | [data]     | [data]     | [data]      | [data] |
+
+4. Add a conversational summary before the table
+5. Highlight key insights (biggest drop, customers with zero orders)
+6. Suggest actionable next steps
+
+Example response:
+"I analyzed revenue drop-offs between Q4 2024 and Q1 2025. Here are the 5 customers with the biggest declines:
+
+| Customer | Q4 2024 | Q1 2025 | Drop Amount | Drop % |
+|----------|---------|---------|-------------|--------|
+| Stanford Health | $3,517 | $0 | $3,517 | 100% |
+| NYU Langone | $2,917 | $0 | $2,917 | 100% |
+
+Stanford Health and NYU Langone had NO orders in Q1 - this needs immediate attention. Would you like me to create follow-up tasks?"
