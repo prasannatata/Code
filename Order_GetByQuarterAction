@@ -34,3 +34,15 @@ public class Order_GetByQuarterAction {
         return results;
     }
 }
+
+++++++++
+// Test fetching orders for Q1 2025
+List<Order_GetByQuarterAction.Request> reqs = new List<Order_GetByQuarterAction.Request>();
+Order_GetByQuarterAction.Request r = new Order_GetByQuarterAction.Request();
+r.quarter = 1; // Q1
+r.year = 2025;
+reqs.add(r);
+
+List<Order_GetByQuarterAction.Response> res = Order_GetByQuarterAction.run(reqs);
+System.debug('>>> Quarter Results: ' + res[0].result);
+
