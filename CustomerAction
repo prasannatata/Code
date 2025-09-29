@@ -72,3 +72,19 @@ public with sharing class CustomerAction {
         return outputs;
     }
 }
+
+
+List<CustomerAction.Request> reqs = new List<CustomerAction.Request>();
+CustomerAction.Request r = new CustomerAction.Request();
+r.filters = new Map<String, String>{
+    'year' => '2025',
+    'quarter' => '1',
+    'orderStatus' => 'In Progress'
+};
+r.topN = 5;
+reqs.add(r);
+
+List<CustomerAction.Result> results = CustomerAction.run(reqs);
+
+System.debug('RESULT JSON >>> ' + results[0].summaryJson);
+
