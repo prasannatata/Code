@@ -1,0 +1,208 @@
+Perfect 🙌 Let’s build the **full working set** for your Revenue Drop-Off analysis (Apex + Lightning Type + LWC).
+
+---
+
+## 🔹 1. Apex Invocable Method
+
+```apex
+public with sharing class RevenueDropOffController {
+
+    @InvocableMethod(
+        label='Detect Revenue Drop-Off'
+        description='Compares customer revenue across two periods and returns drop-off details'
+    )
+    public static List<Response> detectDropOff(List<Request> reqList) {
+        List<Response> responses = new List<Response>();
+
+        if (reqList.isEmpty()) return responses;
+
+        Request req = reqList[0];
+
+        // Dummy SOQL for illustration — replace with your actual revenue object
+        List<AggregateResult> results = [
+            SELECT Account.Name customerName,
+                   SUM(Amount) amount
+            FROM Opportunity
+            WHERE CloseDate >= :req.period1Start AND CloseDate <= :req.period1End
+            GROUP BY Account.Name
+        ];
+
+        List<DropOffWrapper> wrappers = new List<DropOffWrapper>();
+
+        for (AggregateResult ar : results) {
+            DropOffWrapper w = new DropOffWrapper();
+            w.customerName   = (String)ar.get('customerName');
+            w.period1Revenue = String.valueOf(ar.get('amount'));
+            w.period2Revenue = '0'; // TODO: replace with actual period2 query logic
+            w.dropAmount     = '0'; // TODO: calculate difference
+            w.dropPercentage = '0%'; // TODO: calculate %
+            wrappers.add(w);
+        }
+
+        Response resp = new Response();
+        resp.dropOffResults = wrappers;
+        responses.add(resp);
+
+        return responses;
+    }
+
+    public class Request {
+        @InvocableVariable(label='Period 1 Start Date')
+        public Date period1Start;
+
+        @InvocableVariable(label='Period 1 End Date')
+        public Date period1End;
+
+        @InvocableVariable(label='Period 2 Start Date')
+        public Date period2Start;
+
+        @InvocableVariable(label='Period 2 End Date')
+        public Date period2End;
+
+        @InvocableVariable(label='Top N Customers')
+        public Integer topN;
+    }
+
+    public class Response {
+        @InvocableVariable
+        public List<DropOffWrapper> dropOffResults;
+    }
+
+    public class DropOffWrapper {
+        @InvocableVariable public String customerName;
+        @InvocableVariable public String period1Revenue;
+        @InvocableVariable public String period2Revenue;
+        @InvocableVariable public String dropAmount;
+        @InvocableVariable public String dropPercentage;
+    }
+}
+```
+
+---
+
+## 🔹 2. Custom Lightning Type
+
+📂 Create folder:
+`force-app/main/default/lightningTypes/RevenueDropOffResponse/`
+
+### schema.json
+
+```json
+{
+  "title": "Revenue Drop-Off Response",
+  "description": "Wrapper for revenue drop-off details",
+  "lightning:type": "@apexClassType/c__RevenueDropOffController$DropOffWrapper"
+}
+```
+
+### renderer.json
+
+```json
+{
+  "collection": {
+    "renderer": {
+      "componentOverrides": {
+        "$": {
+          "definition": "c/revenueDropOffTable"
+        }
+      }
+    }
+  }
+}
+```
+
+---
+
+## 🔹 3. LWC – Data Table
+
+📂 `lwc/revenueDropOffTable/`
+
+### revenueDropOffTable.html
+
+```html
+<template>
+    <lightning-card title="Revenue Drop-Off Analysis" icon-name="standard:account">
+        <lightning-datatable
+            data={rows}
+            columns={columns}
+            key-field="customerName"
+            hide-checkbox-column>
+        </lightning-datatable>
+    </lightning-card>
+</template>
+```
+
+### revenueDropOffTable.js
+
+```javascript
+import { LightningElement, api } from 'lwc';
+
+export default class RevenueDropOffTable extends LightningElement {
+    @api value; // Agentforce will pass DropOffWrapper list here
+
+    columns = [
+        { label: 'Customer', fieldName: 'customerName' },
+        { label: 'Period 1 Revenue', fieldName: 'period1Revenue' },
+        { label: 'Period 2 Revenue', fieldName: 'period2Revenue' },
+        { label: 'Drop Amount', fieldName: 'dropAmount' },
+        { label: 'Drop %', fieldName: 'dropPercentage' }
+    ];
+
+    get rows() {
+        let out = [];
+        if (this.value && Array.isArray(this.value)) {
+            out = this.value.map(item => ({
+                customerName: item.customerName,
+                period1Revenue: item.period1Revenue,
+                period2Revenue: item.period2Revenue,
+                dropAmount: item.dropAmount,
+                dropPercentage: item.dropPercentage
+            }));
+        }
+        return out;
+    }
+}
+```
+
+### revenueDropOffTable.js-meta.xml
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>64.0</apiVersion>
+    <isExposed>true</isExposed>
+    <masterLabel>Revenue Drop-Off Table</masterLabel>
+    <targets>
+        <target>lightning__AgentforceOutput</target>
+    </targets>
+    <targetConfigs>
+        <targetConfig targets="lightning__AgentforceOutput">
+            <sourceType name="lightning__listType" itemTypeName="c__RevenueDropOffResponse"/>
+        </targetConfig>
+    </targetConfigs>
+</LightningComponentBundle>
+```
+
+---
+
+## 🔹 4. Agentforce Action Setup
+
+When you create the Agent Action in **Agent Builder**:
+
+1. Select your Apex `RevenueDropOffController.detectDropOff` as the backend
+2. Add inputs (`period1Start`, `period1End`, `period2Start`, `period2End`, `topN`)
+3. For **Outputs**, select **Custom Lightning Type → RevenueDropOffResponse**
+4. Salesforce will automatically render your `revenueDropOffTable` LWC in the chat
+
+---
+
+✅ With this setup:
+
+* Apex → outputs list of `DropOffWrapper`
+* Lightning Type → tells Agentforce how to interpret the list
+* Renderer.json → binds it to your `revenueDropOffTable`
+* LWC → shows a dynamic datatable
+
+---
+
+Do you want me to also add a **Summary Row (Total Revenue Drop)** to this table so it shows at the bottom automatically?
