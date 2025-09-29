@@ -1,7 +1,7 @@
 public with sharing class Customer_TopRevenueAction {
     public class Request {
         @InvocableVariable(required=false)
-        public Integer limitSize;   // optional: how many customers to return
+        public Integer limitSize;
     }
 
     public class Response {
@@ -17,9 +17,9 @@ public with sharing class Customer_TopRevenueAction {
             Response res = new Response();
             Integer limitValue = (r.limitSize != null && r.limitSize > 0) ? r.limitSize : 10;
 
-            // ✅ Explicit aliases for SUM() and COUNT()
+            // ✅ Explicit aliasing
             String query =
-                'SELECT CustomerName__c, SUM(Revenue__c) totalRevenue, COUNT(Id) totalOrders ' +
+                'SELECT CustomerName__c, SUM(Revenue__c) totalRevenue, COUNT(Id) orderCount ' +
                 'FROM Realistic_OrderLine_Datacsv__dlm ' +
                 'GROUP BY CustomerName__c ' +
                 'ORDER BY totalRevenue DESC ' +
@@ -34,10 +34,13 @@ public with sharing class Customer_TopRevenueAction {
                 table += '---|---|---\n';
 
                 for (AggregateResult ar : rows) {
-                    table += (String)ar.get('CustomerName__c') + ' | ' +
-                             String.valueOf(ar.get('totalOrders')) + ' | $' +
-                             String.valueOf(ar.get('totalRevenue')) + '\n';
+                    String custName = (String)ar.get('CustomerName__c');
+                    String orderCount = String.valueOf(ar.get('orderCount'));
+                    String revenue = String.valueOf(ar.get('totalRevenue'));
+
+                    table += custName + ' | ' + orderCount + ' | $' + revenue + '\n';
                 }
+
                 res.result = table;
             }
 
