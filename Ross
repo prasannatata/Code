@@ -1,6 +1,6 @@
 public with sharing class RevenueHelper {
 
-    // Wrapper to match your Agent Action schema
+    // Wrapper for Agent Action output
     public class RevenueRecord {
         @AuraEnabled public String customer { get; set; }
         @AuraEnabled public String parentCustomer { get; set; }
@@ -14,29 +14,32 @@ public with sharing class RevenueHelper {
         List<RevenueRecord> results = new List<RevenueRecord>();
 
         try {
-            // Query Accounts with AnnualRevenue (adjust object/fields as needed)
-            List<Account> accList = [
-                SELECT Id, Name, Parent.Name, AnnualRevenue, NumberOfOrders__c
-                FROM Account
-                WHERE CALENDAR_YEAR(CreatedDate) = :yearValue
-                ORDER BY AnnualRevenue DESC
+            // Query Data Cloud object instead of Account
+            List<Realistic_OrderLine_Datacsv__dlm> orderLines = [
+                SELECT CustomerName__c,
+                       ParentCustomerName__c,
+                       Revenue__c,
+                       OrderRefNumber__c,
+                       OrderCreateDate__c
+                FROM Realistic_OrderLine_Datacsv__dlm
+                WHERE CALENDAR_YEAR(OrderCreateDate__c) = :yearValue
+                ORDER BY Revenue__c DESC
                 LIMIT 5
             ];
 
-            // Build response list
-            for (Account acc : accList) {
+            for (Realistic_OrderLine_Datacsv__dlm ol : orderLines) {
                 RevenueRecord rec = new RevenueRecord();
-                rec.customer       = acc.Name;
-                rec.parentCustomer = (acc.Parent != null) ? acc.Parent.Name : null;
-                rec.orders         = (acc.NumberOfOrders__c != null) ? Integer.valueOf(acc.NumberOfOrders__c) : 0;
-                rec.revenue        = (acc.AnnualRevenue != null) ? acc.AnnualRevenue : 0;
+                rec.customer       = ol.CustomerName__c;
+                rec.parentCustomer = ol.ParentCustomerName__c;
+                rec.orders         = 1; // Default: 1 order per row (aggregate logic can be added later)
+                rec.revenue        = (ol.Revenue__c != null) ? ol.Revenue__c : 0;
                 rec.heading        = 'Top 5 customers by revenue in ' + yearValue;
                 results.add(rec);
             }
 
         } catch (Exception e) {
             System.debug('⚠️ Error in getTopRevenueCustomers: ' + e.getMessage());
-            // Return empty list instead of throwing error
+            return new List<RevenueRecord>(); // safe fallback
         }
 
         return results;
