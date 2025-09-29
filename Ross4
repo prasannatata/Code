@@ -1,0 +1,191 @@
+public with sharing class Customer_TopRevenueAction {
+    
+    public class Request {
+        @InvocableVariable(required=false)
+        public Integer limitSize;
+        
+        @InvocableVariable(required=false)
+        public Integer year;
+        
+        @InvocableVariable(required=false)
+        public Integer quarter;
+    }
+
+    public class Response {
+        @InvocableVariable
+        public String summaryText;
+        
+        @InvocableVariable
+        public String tableData;
+        
+        @InvocableVariable
+        public Integer recordCount;
+    }
+
+    @InvocableMethod(label='Top Revenue Customers' description='Returns top customers by revenue')
+    public static List<Response> run(List<Request> requests) {
+        List<Response> results = new List<Response>();
+        
+        if (requests == null || requests.isEmpty()) {
+            return results;
+        }
+
+        Request req = requests[0];
+        Response res = new Response();
+        
+        try {
+            Integer limitValue = (req.limitSize != null && req.limitSize > 0) ? req.limitSize : 10;
+            Integer year = (req.year != null) ? req.year : Date.today().year();
+            Integer quarter = req.quarter;
+            
+            // Build date filter
+            Date startDate = Date.newInstance(year, 1, 1);
+            Date endDate = Date.newInstance(year, 12, 31);
+            
+            if (quarter != null && quarter >= 1 && quarter <= 4) {
+                Integer startMonth = (quarter - 1) * 3 + 1;
+                Integer endMonth = startMonth + 2;
+                startDate = Date.newInstance(year, startMonth, 1);
+                endDate = Date.newInstance(year, endMonth, Date.daysInMonth(year, endMonth));
+            }
+            
+            // Query with date filter
+            String soql = 
+                'SELECT CustomerName__c, ' +
+                'COUNT(Id) totalOrders, ' +
+                'SUM(Revenue__c) totalRevenue ' +
+                'FROM Realistic_OrderLine_Datacsv__dlm ' +
+                'WHERE OrderCreateDate__c >= :startDate ' +
+                'AND OrderCreateDate__c <= :endDate ' +
+                'GROUP BY CustomerName__c ' +
+                'ORDER BY SUM(Revenue__c) DESC NULLS LAST ' +
+                'LIMIT :limitValue';
+            
+            List<AggregateResult> rows = Database.query(soql);
+            
+            if (rows.isEmpty()) {
+                res.summaryText = 'No customer revenue data found for the specified period.';
+                res.tableData = '';
+                res.recordCount = 0;
+            } else {
+                // Build summary
+                Decimal totalRevenue = 0;
+                for (AggregateResult ar : rows) {
+                    totalRevenue += (Decimal)ar.get('totalRevenue');
+                }
+                
+                String period = quarter != null ? 'Q' + quarter + ' ' + year : String.valueOf(year);
+                res.summaryText = 'Top ' + rows.size() + ' customers by revenue for ' + period + '. ' +
+                                 'Combined revenue: $' + totalRevenue.setScale(2).format();
+                
+                // Build table with proper formatting
+                res.tableData = buildTable(rows);
+                res.recordCount = rows.size();
+            }
+            
+        } catch (Exception e) {
+            res.summaryText = 'Error retrieving customer data: ' + e.getMessage();
+            res.tableData = '';
+            res.recordCount = 0;
+            System.debug('Error in Customer_TopRevenueAction: ' + e.getMessage() + '\n' + e.getStackTraceString());
+        }
+        
+        results.add(res);
+        return results;
+    }
+    
+    // Build clean table format
+    private static String buildTable(List<AggregateResult> rows) {
+        List<String> lines = new List<String>();
+        
+        // Format each row as plain text with structure
+        Integer rank = 1;
+        for (AggregateResult ar : rows) {
+            String customer = (String)ar.get('CustomerName__c');
+            Integer orders = (Integer)ar.get('totalOrders');
+            Decimal revenue = (Decimal)ar.get('totalRevenue');
+            
+            String formattedRevenue = '$' + revenue.setScale(2).format();
+            
+            // Use simple, structured format
+            lines.add(rank + '. ' + customer + ' - ' + orders + ' orders - ' + formattedRevenue);
+            rank++;
+        }
+        
+        return String.join(lines, '\n');
+    }
+}
+
+
+// Test 1: Basic call with default limit (10)
+System.debug('========== TEST 1: Default Limit ==========');
+Customer_TopRevenueAction.Request req1 = new Customer_TopRevenueAction.Request();
+req1.limitSize = 10;
+
+List<Customer_TopRevenueAction.Response> results1 = 
+    Customer_TopRevenueAction.run(new List<Customer_TopRevenueAction.Request>{ req1 });
+
+if (!results1.isEmpty()) {
+    Customer_TopRevenueAction.Response res1 = results1[0];
+    System.debug('Summary: ' + res1.summaryText);
+    System.debug('Record Count: ' + res1.recordCount);
+    System.debug('Table Data:\n' + res1.tableData);
+} else {
+    System.debug('No results returned');
+}
+
+// Test 2: Top 5 customers
+System.debug('\n========== TEST 2: Top 5 Customers ==========');
+Customer_TopRevenueAction.Request req2 = new Customer_TopRevenueAction.Request();
+req2.limitSize = 5;
+
+List<Customer_TopRevenueAction.Response> results2 = 
+    Customer_TopRevenueAction.run(new List<Customer_TopRevenueAction.Request>{ req2 });
+
+if (!results2.isEmpty()) {
+    System.debug('Table Data:\n' + results2[0].tableData);
+}
+
+// Test 3: With year filter
+System.debug('\n========== TEST 3: Year 2025 ==========');
+Customer_TopRevenueAction.Request req3 = new Customer_TopRevenueAction.Request();
+req3.limitSize = 10;
+req3.year = 2025;
+
+List<Customer_TopRevenueAction.Response> results3 = 
+    Customer_TopRevenueAction.run(new List<Customer_TopRevenueAction.Request>{ req3 });
+
+if (!results3.isEmpty()) {
+    System.debug('Summary: ' + results3[0].summaryText);
+    System.debug('Table Data:\n' + results3[0].tableData);
+}
+
+// Test 4: With quarter filter
+System.debug('\n========== TEST 4: Q1 2025 ==========');
+Customer_TopRevenueAction.Request req4 = new Customer_TopRevenueAction.Request();
+req4.limitSize = 5;
+req4.year = 2025;
+req4.quarter = 1;
+
+List<Customer_TopRevenueAction.Response> results4 = 
+    Customer_TopRevenueAction.run(new List<Customer_TopRevenueAction.Request>{ req4 });
+
+if (!results4.isEmpty()) {
+    System.debug('Summary: ' + results4[0].summaryText);
+    System.debug('Table Data:\n' + results4[0].tableData);
+}
+
+// Test 5: Edge case - No data
+System.debug('\n========== TEST 5: Future Year (No Data) ==========');
+Customer_TopRevenueAction.Request req5 = new Customer_TopRevenueAction.Request();
+req5.year = 2099;
+
+List<Customer_TopRevenueAction.Response> results5 = 
+    Customer_TopRevenueAction.run(new List<Customer_TopRevenueAction.Request>{ req5 });
+
+if (!results5.isEmpty()) {
+    System.debug('Summary: ' + results5[0].summaryText);
+    System.debug('Record Count: ' + results5[0].recordCount);
+}
+
+System.debug('\n========== ALL TESTS COMPLETE ==========');
