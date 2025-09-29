@@ -17,11 +17,12 @@ public with sharing class Customer_TopRevenueAction {
             Response res = new Response();
             Integer limitValue = (r.limitSize != null && r.limitSize > 0) ? r.limitSize : 10;
 
+            // 👇 Use aliases in SOQL
             String query =
-                'SELECT CustomerName__c, COUNT(Id) totalOrders, SUM(Revenue__c) totalRevenue ' +
+                'SELECT CustomerName__c custName, SUM(Revenue__c) sumRevenue, COUNT(Id) orderCount ' +
                 'FROM Realistic_OrderLine_Datacsv__dlm ' +
                 'GROUP BY CustomerName__c ' +
-                'ORDER BY totalRevenue DESC ' +
+                'ORDER BY SUM(Revenue__c) DESC ' +
                 'LIMIT ' + limitValue;
 
             List<AggregateResult> rows = Database.query(query);
@@ -33,16 +34,9 @@ public with sharing class Customer_TopRevenueAction {
                 table += '---|---|---\n';
 
                 for (AggregateResult ar : rows) {
-                    String custName = (String)ar.get('CustomerName__c');
-                    String orderCount = String.valueOf(ar.get('totalOrders'));
-
-                    // SUM alias sometimes fails, fallback to expr0
-                    Decimal revenue;
-                    try {
-                        revenue = (Decimal)ar.get('totalRevenue');
-                    } catch (Exception e) {
-                        revenue = (Decimal)ar.get('expr0');
-                    }
+                    String custName = (String)ar.get('custName');
+                    String orderCount = String.valueOf(ar.get('orderCount'));
+                    Decimal revenue = (Decimal)ar.get('sumRevenue'); // ✅ alias used here
 
                     table += custName + ' | ' + orderCount + ' | $' + revenue.setScale(2) + '\n';
                 }
@@ -57,11 +51,10 @@ public with sharing class Customer_TopRevenueAction {
     }
 }
 
-
 List<Customer_TopRevenueAction.Request> reqs = new List<Customer_TopRevenueAction.Request>();
 
 Customer_TopRevenueAction.Request r = new Customer_TopRevenueAction.Request();
-r.limitSize = 5; // top 5 customers
+r.limitSize = 5; // top 5
 reqs.add(r);
 
 List<Customer_TopRevenueAction.Response> res = Customer_TopRevenueAction.run(reqs);
