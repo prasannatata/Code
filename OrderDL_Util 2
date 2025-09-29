@@ -1,0 +1,102 @@
+public with sharing class OrderDL_Util {
+
+    // =========================
+    // Table Row Struct
+    // =========================
+    public class Tot {
+        public Integer orderCount = 0;
+        public Decimal revenue = 0;
+    }
+
+    // =========================
+    // Format Generic Orders Table
+    // =========================
+    public static String fmtOrdersTable(List<Realistic_OrderLine_Datacsv__dlm> rows, String title) {
+        String output = '## ' + title + '\n';
+        output += 'OrderRef | Customer | Status | Revenue | Qty | Date | PO Date | Vendor | OEM | Requestor\n';
+        output += '---|---|---|---|---|---|---|---|---|---\n';
+
+        for (Realistic_OrderLine_Datacsv__dlm r : rows) {
+            output += r.OrderRefNumber__c + ' | ' +
+                      r.CustomerName__c + ' | ' +
+                      r.OrderStatus__c + ' | $' +
+                      r.Revenue__c + ' | ' +
+                      r.Quantity__c + ' | ' +
+                      String.valueOf(r.OrderCreateDate__c) + ' | ' +
+                      String.valueOf(r.OrderPODate__c) + ' | ' +
+                      r.Vendor__c + ' | ' +
+                      r.OEM__c + ' | ' +
+                      r.Requestor__c + '\n';
+        }
+        return output;
+    }
+
+    // =========================
+    // Rollup by Field (Customer, Vendor, Modality, OEM)
+    // =========================
+    public static Map<String, Tot> rollup(List<Realistic_OrderLine_Datacsv__dlm> rows, String field) {
+        Map<String, Tot> result = new Map<String, Tot>();
+
+        for (Realistic_OrderLine_Datacsv__dlm r : rows) {
+            String key;
+            if (field == 'Customer') key = r.CustomerName__c;
+            else if (field == 'Vendor') key = r.Vendor__c;
+            else if (field == 'Modality') key = r.Modality__c;
+            else if (field == 'OEM') key = r.OEM__c;
+            else key = 'Other';
+
+            if (String.isBlank(key)) key = 'Unknown';
+
+            if (!result.containsKey(key)) {
+                result.put(key, new Tot());
+            }
+            result.get(key).orderCount++;
+            result.get(key).revenue += (r.Revenue__c != null ? r.Revenue__c : 0);
+        }
+        return result;
+    }
+
+    // =========================
+    // Format Rollup Results
+    // =========================
+    public static String fmtRollupTable(Map<String, Tot> totals, String title, String groupBy) {
+        String output = '## ' + title + '\n';
+        output += groupBy + ' | Order Count | Total Revenue\n';
+        output += '---|---|---\n';
+        for (String key : totals.keySet()) {
+            output += key + ' | ' + totals.get(key).orderCount + ' | $' + totals.get(key).revenue + '\n';
+        }
+        return output;
+    }
+
+    // =========================
+    // Quarter Helpers
+    // =========================
+    public static Date getQuarterStart(Integer year, Integer quarter) {
+        if (quarter == 1) return Date.newInstance(year, 1, 1);
+        if (quarter == 2) return Date.newInstance(year, 4, 1);
+        if (quarter == 3) return Date.newInstance(year, 7, 1);
+        if (quarter == 4) return Date.newInstance(year, 10, 1);
+        return null;
+    }
+
+    public static Date getQuarterEnd(Integer year, Integer quarter) {
+        if (quarter == 1) return Date.newInstance(year, 3, 31);
+        if (quarter == 2) return Date.newInstance(year, 6, 30);
+        if (quarter == 3) return Date.newInstance(year, 9, 30);
+        if (quarter == 4) return Date.newInstance(year, 12, 31);
+        return null;
+    }
+
+    // =========================
+    // Sort Customers by Revenue
+    // =========================
+    public static List<String> sortCustomersByRevenue(Map<String, Decimal> totals, String order) {
+        List<String> customers = new List<String>(totals.keySet());
+        customers.sort();
+        if (order == 'DESC') {
+            customers.reverse();
+        }
+        return customers;
+    }
+}
