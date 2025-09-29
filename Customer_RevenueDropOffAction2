@@ -618,3 +618,51 @@ Map properties:
 
 Do you want me to also write the **exact loading text + sample response flow** (how the conversation will look to the end user) so you can test it quickly in Agentforce?
 
+
+
+
+
+
+
+
+
+
+
+
+=========================
+=================================+
++==+
+
+
+
+
+
+===============+
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>62.0</apiVersion>
+    <isExposed>true</isExposed>
+    <masterLabel>Revenue Drop-Off Table</masterLabel>
+    <description>Displays revenue drop-off analysis in a Lightning Data Table</description>
+    <targets>
+        <target>lightning__FlowScreen</target>
+        <target>lightning__RecordPage</target>
+        <target>lightning__AppPage</target>
+        <target>lightning__HomePage</target>
+        <target>lightning__AgentConsole</target> <!-- 👈 KEY for Agentforce -->
+    </targets>
+    <targetConfigs>
+        <targetConfig targets="lightning__AgentConsole">
+            <property name="customerNames" type="String[]" label="Customer Names"/>
+            <property name="period1Revenue" type="String[]" label="Period 1 Revenue"/>
+            <property name="period2Revenue" type="String[]" label="Period 2 Revenue"/>
+            <property name="dropAmount" type="String[]" label="Drop Amount"/>
+            <property name="dropPercentage" type="String[]" label="Drop Percentage"/>
+            <property name="period1Label" type="String" label="Period 1 Label"/>
+            <property name="period2Label" type="String" label="Period 2 Label"/>
+            <property name="summaryText" type="String" label="Summary Text"/>
+        </targetConfig>
+    </targetConfigs>
+</LightningComponentBundle>
+
+
