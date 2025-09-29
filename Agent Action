@@ -188,3 +188,73 @@ Return the result message confirming how many tasks were created.
 “Create follow-up tasks for customer IDs [A001, A002, A003], assigned to John Smith, due tomorrow.”
 
 “Add a call task for OEMY accounts, assign to rep 005xx00000123ABC.”
+
++++++++++++++
+Perfect timing 🙌 — now that your `Customer_TopRevenueAction` is fixed, let’s map it into **Agentforce Agent Actions** with **clear instructions** so your Sales Data Analysis topic knows when to call it.
+
+Here’s the **Agent Action Instructions** you can paste into Copilot Builder:
+
+---
+
+### 🔹 Agent Action: **Get Top Revenue Customers**
+
+**Label:** Get Top Revenue Customers
+**API Name:** Customer_TopRevenueAction
+
+**Instructions:**
+Use this action to fetch the **top N customers ranked by revenue** within all available orders.
+
+* Always call this when the user asks:
+
+  * "Top customers by revenue"
+  * "Top 5 customers this year"
+  * "Which customers bring the most revenue?"
+  * "Show customer rankings by sales"
+
+**Input Fields:**
+
+* `limitSize` → number of top customers to return.
+
+  * If the user does not specify, default to **10**.
+  * Example: "top 5 customers" → limitSize = 5
+
+**Output Fields:**
+
+* `result` → a Markdown-formatted table:
+
+  * **Customer | Orders | Total Revenue**
+
+**Formatting Guidance:**
+
+* Always show a conversational summary:
+  *"Here are the top {N} customers ranked by revenue."*
+* Then show the table.
+* Finish with a follow-up suggestion:
+  *"Would you like to see trends for these customers over the last 4 quarters?"*
+
+---
+
+✅ Example Conversation Flow:
+
+* **User:** "Who are our top 3 customers?"
+* **Agent:** calls `Customer_TopRevenueAction(limitSize=3)`
+* **Output:**
+
+  ```
+  Here are the top 3 customers ranked by revenue.
+
+  Customer | Orders | Total Revenue  
+  ---|---|---  
+  NYU Langone | 5 | $29,170.00  
+  Mayo Clinic | 4 | $22,500.00  
+  Mass General | 3 | $18,900.00  
+
+  Would you like to analyze their revenue trend by quarter?
+  ```
+
+---
+
+👉 If you want, I can also draft **Agent Action Instructions** for your other Apex actions (`Customer_RevenueTrendAction`, `Order_GetByQuarterAction`, `OrdersAction`) so you have a **consistent playbook** across all sales queries.
+
+Do you want me to give you the **full set** of instructions for each Apex class?
+
