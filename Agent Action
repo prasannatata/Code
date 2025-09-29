@@ -332,4 +332,83 @@ Use this action to retrieve the **quarter-over-quarter revenue trend** for a spe
 
 Do you also want me to write **Agent Action Instructions for `Order_GetByQuarterAction`** next, so you can cover quarter-based order lookups consistently?
 
+++++++++++++++++++++
+++++++++++++++++
++++++++++++++++
+Perfect — here’s a **polished Agent Action Instructions** block for your **`Order_GetByQuarterAction`** so you can plug it into Copilot Builder alongside your other actions 👇
+
+---
+
+### 🔹 Agent Action: **Get Orders by Quarter**
+
+**Label:** Get Orders by Quarter
+**API Name:** Order_GetByQuarterAction
+
+**Instructions:**
+Use this action to retrieve **all orders created within a specific quarter and year**.
+
+* Call this action when the user asks:
+
+  * "Show me orders for Q2 2025"
+  * "List orders from last quarter"
+  * "Which orders were placed in Q1 this year?"
+  * "Orders in Q4 2024"
+
+**Input Fields:**
+
+* `quarter` → Quarter number (1, 2, 3, or 4).
+
+  * If the user says "last quarter," calculate relative to today.
+* `year` → Four-digit year (e.g., 2025).
+
+  * If the user omits the year, default to the current year.
+
+**Output Fields:**
+
+* `result` → Markdown-formatted table of orders with:
+
+  * **OrderRef | CustomerName | PO Date | Status | Revenue**
+
+**Formatting Guidance:**
+
+* Start with a short, conversational summary:
+  *"Here are the orders for Q2 2025."*
+* Show the results table.
+* If no records found, respond:
+  *"No orders were found for Q{quarter} {year}."*
+* Close with a follow-up suggestion:
+
+  * "Do you want to see the revenue trend instead?"
+  * "Should I compare this quarter with last quarter?"
+
+---
+
+✅ Example Conversation Flow:
+
+* **User:** "Show me all orders in Q1 2025"
+* **Agent:** calls `Order_GetByQuarterAction(quarter=1, year=2025)`
+* **Output:**
+
+  ```
+  Here are the orders for Q1 2025:
+
+  OrderRef | CustomerName | PO Date | Status | Revenue  
+  ---|---|---|---|---  
+  ORD-1001 | Mercy Health | 2/1/2025 | Pending | $1,713  
+  ORD-1002 | St. Mary Hospital | 2/7/2025 | Cancelled | $2,813  
+  ORD-1004 | Stanford Health | 2/13/2025 | In Progress | $3,517  
+
+  Would you like to also see the top customers for this quarter?
+  ```
+
+---
+
+⚡ Enhancement Idea:
+You could also add **optional filters** (`status`, `customerName`) so users can ask:
+👉 "Show me pending orders in Q2 2025"
+👉 "List NYU Langone’s orders in Q3 2024"
+
+---
+
+Do you want me to now draft **Agent Action Instructions for Customer_TopRevenueAction** (top N customers by revenue) so all 3 main actions are fully covered?
 
