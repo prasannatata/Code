@@ -1,0 +1,89 @@
+public with sharing class DynamicOrderSummaryAction {
+
+    public class Request {
+        @InvocableVariable(label='Group By Fields')
+        public String groupByFields;   
+        // e.g. "CustomerName__c" or "Modality__c, Vendor__c"
+
+        @InvocableVariable(label='Filters')
+        public String filters;         
+        // e.g. "CustomerName__c = 'Johns Hopkins' AND OrderCreateDate__c = LAST_N_QUARTERS:4"
+
+        @InvocableVariable(label='Limit')
+        public Integer limit;          
+        // e.g. 5
+    }
+
+    public class Result {
+        @InvocableVariable(label='Summary Markdown')
+        public String summaryMarkdown;
+    }
+
+    @InvocableMethod(label='Summarize Orders Dynamically')
+    public static List<Result> run(List<Request> requests) {
+        List<Result> outputs = new List<Result>();
+
+        if (requests.isEmpty()) return outputs;
+        Request req = requests[0];
+
+        Integer maxLimit = (req.limit != null && req.limit > 0) ? req.limit : 10;
+
+        // Build SOQL dynamically
+        String query = 'SELECT ' + req.groupByFields +
+                       ', COUNT(Id) totalOrders, SUM(Revenue__c) totalRevenue ' +
+                       'FROM Realistic_OrderLine_Datacsv__dlm ';
+
+        if (!String.isBlank(req.filters)) {
+            query += 'WHERE ' + req.filters + ' ';
+        }
+
+        query += 'GROUP BY ' + req.groupByFields +
+                 ' ORDER BY SUM(Revenue__c) DESC ' +
+                 'LIMIT ' + maxLimit;
+
+        System.debug('Executing Dynamic Query: ' + query);
+
+        List<AggregateResult> ars = Database.query(query);
+
+        // Build markdown table
+        String[] groupFields = req.groupByFields.split(',');
+        for (Integer i = 0; i < groupFields.size(); i++) {
+            groupFields[i] = groupFields[i].trim();
+        }
+
+        String header = '## Order Summary\n\n| ' + String.join(groupFields, ' | ') + ' | Orders | Revenue |\n';
+        String sep = '|' + String.join(new List<String>(new List<String>{''.join(new List<String>{'---'})}), ' | ') + '|\n';
+        String body = '';
+
+        for (AggregateResult ar : ars) {
+            List<String> row = new List<String>();
+            for (String field : groupFields) {
+                row.add(String.valueOf(ar.get(field)));
+            }
+            row.add(String.valueOf(ar.get('totalOrders')));
+            row.add(String.valueOf(ar.get('totalRevenue')));
+            body += '| ' + String.join(row, ' | ') + ' |\n';
+        }
+
+        Result r = new Result();
+        r.summaryMarkdown = header + body;
+        outputs.add(r);
+
+        return outputs;
+    }
+}
+
+
+
+List<DynamicOrderSummaryAction.Request> reqs = new List<DynamicOrderSummaryAction.Request>();
+
+DynamicOrderSummaryAction.Request r = new DynamicOrderSummaryAction.Request();
+r.groupByFields = 'Modality__c, Vendor__c';
+r.filters = 'CustomerName__c = \'Johns Hopkins\' AND OrderCreateDate__c = LAST_N_QUARTERS:4';
+r.limit = 10;
+
+reqs.add(r);
+
+List<DynamicOrderSummaryAction.Result> results = DynamicOrderSummaryAction.run(reqs);
+
+System.debug('>>> Result: ' + results[0].summaryMarkdown);
