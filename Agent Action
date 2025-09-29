@@ -146,3 +146,45 @@ Got it 👍 — you also want **Customer-based** and **Date Range–based** quer
 ---
 
 Do you want me to consolidate **all 8 actions into a single mapping table (Topic → Apex Class → Inputs/Outputs → Instructions)** so you can configure them cleanly in **Agentforce Builder**?
+
+
+
+
++++++++++++++
+
+🔹 Agent Action Configuration
+
+When you add this Apex class in Agentforce Builder → Agent Action, set it up like this:
+
+Input
+
+customerIds (Array of IDs / text list) → "Provide the list of Customer IDs"
+
+salesRepId (String) → "Provide the User Id of the Sales Rep"
+
+dueDate (Date) → "Provide the due date for tasks"
+
+subject (String) → "Provide the subject for tasks"
+
+Output
+
+result (String) → "Task creation summary"
+
+🔹 Agent Action Instructions
+
+Use something clear for LLM grounding:
+
+Use this action when the user asks to create Salesforce Tasks for customers. 
+You must provide: 
+- the customer IDs (Accounts, Opportunities, etc.),
+- the Sales Rep’s User Id,
+- optionally a due date (defaults to tomorrow),
+- optionally a subject for the task. 
+Return the result message confirming how many tasks were created.
+
+
+✨ Example queries your agent can now answer:
+
+“Create follow-up tasks for customer IDs [A001, A002, A003], assigned to John Smith, due tomorrow.”
+
+“Add a call task for OEMY accounts, assign to rep 005xx00000123ABC.”
