@@ -1,0 +1,65 @@
+public with sharing class Order_GetByCompositeFiltersAction {
+
+    public class Request {
+        @InvocableVariable(label='Order Status')
+        public String orderStatus;
+
+        @InvocableVariable(label='PO Date Before')
+        public Date poDateBefore;
+
+        @InvocableVariable(label='Requestor')
+        public String requestor;
+
+        @InvocableVariable(label='OEM')
+        public String oem;
+    }
+
+    public class Result {
+        @InvocableVariable(label='Order Name')
+        public String orderName;
+
+        @InvocableVariable(label='Order Status')
+        public String orderStatus;
+
+        @InvocableVariable(label='PO Date')
+        public Date poDate;
+    }
+
+    @InvocableMethod(label='Get Orders By Composite Filters')
+    public static List<Result> run(List<Request> requests) {
+        List<Result> results = new List<Result>();
+        if(requests.isEmpty()) return results;
+
+        Request req = requests[0];
+
+        // Build SOQL dynamically
+        String soql = 'SELECT Name, Status__c, PO_Date__c FROM Order__c WHERE Id != null ';
+
+        if(String.isNotBlank(req.orderStatus)){
+            soql += 'AND Status__c = :req.orderStatus ';
+        }
+        if(req.poDateBefore != null){
+            soql += 'AND PO_Date__c < :req.poDateBefore ';
+        }
+        if(String.isNotBlank(req.requestor)){
+            soql += 'AND Requestor__c = :req.requestor ';
+        }
+        if(String.isNotBlank(req.oem)){
+            soql += 'AND OEM__c = :req.oem ';
+        }
+
+        System.debug('Final Query: ' + soql);
+
+        List<Order__c> orders = Database.query(soql);
+
+        for(Order__c o : orders){
+            Result r = new Result();
+            r.orderName = o.Name;
+            r.orderStatus = o.Status__c;
+            r.poDate = o.PO_Date__c;
+            results.add(r);
+        }
+
+        return results;
+    }
+}
