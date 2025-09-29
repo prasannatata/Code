@@ -64,72 +64,65 @@ for (Order_GetDetailsAction.Response res : results) {
     System.debug('Order Details Output:\n' + res.result);
 }
 
-+++++++++++++++++++++++++++++++++++++
-Perfect — you’re on the **Agent Action Configuration** screen. Here you’re wiring up your Apex Invocable class (`Order_GetDetailsAction`) with the Agentforce topic. Let’s fill these values properly:
+++++++++++++++++++++++++++++++++++
+
+
+Great question 👍 — the **Instructions** field is where you tell the agent *how to use this parameter* when calling your Apex action. It should be **short, clear, and directly map to your Apex variable**.
+
+For your case (`Get Order Details` action with input `orderRef` and output `result`):
 
 ---
 
-### 1. **Agent Action Label**
+### 🔹 Input: Order Reference Number (`orderRef`)
 
-* Example: **Get Order Details**
+**Instructions (what to type in the box):**
 
-(Already set in your screenshot ✅)
+```
+Provide the order reference number for the order to retrieve.
+```
 
----
-
-### 2. **Agent Action Instructions**
-
-This is what tells the agent when to trigger this action.
-Keep it simple and aligned with user intent.
-
-👉 Example:
-`Use this action to fetch details of a specific order when a user provides an Order Reference Number.`
+This tells the agent: "When the user mentions an order reference number, pass it here."
 
 ---
 
-### 3. **Loading Text (optional)**
+### 🔹 Output: Order Details (`result`)
 
-What the user sees while the action is running.
+**Instructions (what to type in the box):**
 
-👉 Example:
-`Fetching order details...`
+```
+Formatted details of the order based on the given reference number.
+```
 
----
-
-### 4. **Input Mapping** (this matches your Apex `Request` class variables)
-
-* **Order Reference Number**
-
-  * **API Name**: `orderRef` (must match your `@InvocableVariable` name)
-  * **Data Type**: `lightning__TextType`
-  * **Require Input**: ✅ (check this, since user must give orderRef)
-  * **Collect Data From User**: ✅ (so the bot asks “What’s the Order Reference Number?” if not provided)
+This tells the agent what to expect back and how to use it in conversation.
 
 ---
 
-### 5. **Output Mapping** (this matches your Apex `Response` class variables)
+### ✅ Full Example Filled
 
-* **Order Details**
+* **Input:**
 
-  * **API Name**: `result`
-  * **Data Type**: `lightning__TextType`
-  * **Show in Conversation**: ✅ (so the agent displays the formatted result)
-  * **Output Rendering**: `Text`
+  * Field Label: *Order Reference Number*
+  * API Name: `orderRef`
+  * Instructions: `Provide the order reference number for the order to retrieve.`
+  * Require Input: ✅
+  * Collect Data from User: ✅
 
----
+* **Output:**
 
-### ✅ Final Filled Example
-
-* **Label**: Get Order Details
-* **Instructions**: Use this action to fetch details of a specific order when a user provides an Order Reference Number.
-* **Input**: `orderRef` → Text → Require Input + Collect from User
-* **Output**: `result` → Text → Show in Conversation
-
----
-
-🔹 After this, you’ll **Finish** and add this Action under the **Sales Data Analysis** topic.
-🔹 Repeat the same process for other Apex classes (`Order_GetByStatusAction`, `Order_GetByVendorAction`, etc.) with relevant instructions and input/output mappings.
+  * Field Label: *Order Details*
+  * API Name: `result`
+  * Instructions: `Formatted details of the order based on the given reference number.`
+  * Show in Conversation: ✅
+  * Output Rendering: Text
 
 ---
 
-👉 Do you want me to draft **all mappings for each Apex class** (Details, Status, Vendor, Modality, OEM, CompositeFilters) so you can directly configure them one by one?
+👉 After you configure like this, your agent will know:
+
+* Ask user for the **order reference number**
+* Call your Apex class with it
+* Show the **order details** back in conversation
+
+---
+
+Do you want me to now draft the **instructions for all your other Apex actions** (Status, Vendor, Modality, OEM, Composite Filters), so you can just copy-paste them while setting up?
