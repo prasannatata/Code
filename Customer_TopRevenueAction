@@ -1,0 +1,70 @@
+public with sharing class Customer_TopRevenueAction {
+    public class Request {
+        @InvocableVariable(label='Top N Customers')
+        public Integer topN;
+    }
+    public class Response {
+        @InvocableVariable(label='Result')
+        public String result;
+    }
+
+    @InvocableMethod(label='Get Top Customers by Revenue')
+    public static List<Response> run(List<Request> reqs) {
+        List<Response> results = new List<Response>();
+        for (Request r : reqs) {
+            Response res = new Response();
+            Integer limitN = (r.topN != null && r.topN > 0) ? r.topN : 10;
+
+            Map<String, Decimal> totals = new Map<String, Decimal>();
+            Map<String, String> parents = new Map<String, String>();
+
+            for (Realistic_OrderLine_Datacsv__dlm o : [
+                SELECT CustomerName__c, ParentCustomerName__c, Revenue__c
+                FROM Realistic_OrderLine_Datacsv__dlm
+            ]) {
+                totals.put(o.CustomerName__c, (totals.containsKey(o.CustomerName__c) ? totals.get(o.CustomerName__c) : 0) + o.Revenue__c);
+                parents.put(o.CustomerName__c, o.ParentCustomerName__c);
+            }
+
+            List<String> sortedCustomers = new List<String>(totals.keySet());
+            sortedCustomers.sort(new List<String>{
+                'DESC' // by revenue
+            });
+
+            String output = '## Top ' + limitN + ' Customers by Revenue\n';
+            output += 'Customer | Parent | Total Revenue\n---|---|---\n';
+
+            Integer count = 0;
+            for (String cust : sortedCustomers) {
+                output += cust + ' | ' + parents.get(cust) + ' | $' + totals.get(cust) + '\n';
+                count++;
+                if (count >= limitN) break;
+            }
+
+            res.result = output;
+            results.add(res);
+        }
+        return results;
+    }
+}
+
+
+
+// ============================================
+// Test Script for Customer_TopRevenueAction
+// ============================================
+
+// Create request wrapper
+Customer_TopRevenueAction.Request req = new Customer_TopRevenueAction.Request();
+req.topN = 5;   // Get top 5 customers by revenue (default = 10 if not set)
+
+// Run the action
+List<Customer_TopRevenueAction.Response> results = Customer_TopRevenueAction.run(
+    new List<Customer_TopRevenueAction.Request>{ req }
+);
+
+// Debug output
+System.debug('==== Customer_TopRevenueAction Results ====');
+for (Customer_TopRevenueAction.Response r : results) {
+    System.debug(r.result);
+}
