@@ -1,7 +1,7 @@
-public with sharing class Customer_RevenueTrendAction {
+public with sharing class Customer_TopRevenueAction {
     public class Request {
-        @InvocableVariable(required=true)
-        public String customerName;
+        @InvocableVariable(required=false)
+        public Integer limitSize;   // Optional: how many top customers to return
     }
 
     public class Response {
@@ -9,36 +9,51 @@ public with sharing class Customer_RevenueTrendAction {
         public String result;
     }
 
-    @InvocableMethod(label='Customer Revenue Trend' description='Show revenue trends for a specific customer')
-    public static List<Response> run(List<Request> requests) {
+    @InvocableMethod(label='Top Revenue Customers' description='List top customers by revenue')
+    public static List<Response> run(List<Request> reqs) {
         List<Response> results = new List<Response>();
-        
-        for (Request r : requests) {
-            Response res = new Response();
-            
-            // FIX: Added OrderStatus__c and OEM__c
-            String query = 'SELECT OrderRefNumber__c, CustomerName__c, Revenue__c, OrderPODate__c, OrderStatus__c, OEM__c ' +
-                           'FROM Realistic_OrderLine_Datacsv__dlm ' +
-                           'WHERE CustomerName__c = \'' + String.escapeSingleQuotes(r.customerName) + '\'';
 
-            List<Realistic_OrderLine_Datacsv__dlm> rows = Database.query(query);
+        for (Request r : reqs) {
+            Response res = new Response();
+
+            Integer limitValue = (r.limitSize != null && r.limitSize > 0) ? r.limitSize : 10;
+
+            // ✅ Dynamic SOQL with GROUP BY
+            String query =
+                'SELECT CustomerName__c, SUM(Revenue__c) totalRevenue, COUNT(Id) orderCount ' +
+                'FROM Realistic_OrderLine_Datacsv__dlm ' +
+                'GROUP BY CustomerName__c ' +
+                'ORDER BY totalRevenue DESC ' +
+                'LIMIT ' + limitValue;
+
+            List<AggregateResult> rows = Database.query(query);
 
             if (rows.isEmpty()) {
-                res.result = '❌ No orders found for ' + r.customerName;
+                res.result = '❌ No customer revenue data found.';
             } else {
-                res.result = OrderDL_Util.fmtOrdersTable(rows, 'Revenue Trend for ' + r.customerName);
+                String table = 'Customer | Orders | Total Revenue\n';
+                table += '---|---|---\n';
+                for (AggregateResult ar : rows) {
+                    table += (String)ar.get('CustomerName__c') + ' | ' +
+                             String.valueOf(ar.get('orderCount')) + ' | $' +
+                             String.valueOf(ar.get('totalRevenue')) + '\n';
+                }
+                res.result = table;
             }
 
             results.add(res);
         }
+
         return results;
     }
 }
 
-List<Customer_RevenueTrendAction.Request> reqs = new List<Customer_RevenueTrendAction.Request>();
-Customer_RevenueTrendAction.Request r = new Customer_RevenueTrendAction.Request();
-r.customerName = 'NYU Langone';  // must match a CustomerName__c from your dataset
+List<Customer_TopRevenueAction.Request> reqs = new List<Customer_TopRevenueAction.Request>();
+
+Customer_TopRevenueAction.Request r = new Customer_TopRevenueAction.Request();
+r.limitSize = 5;   // Top 5 customers
 reqs.add(r);
 
-List<Customer_RevenueTrendAction.Response> res = Customer_RevenueTrendAction.run(reqs);
-System.debug('>>> Customer Revenue Trend: ' + res[0].result);
+List<Customer_TopRevenueAction.Response> res = Customer_TopRevenueAction.run(reqs);
+
+System.debug('>>> Top Customers by Revenue:\n' + res[0].result);
