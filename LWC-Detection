@@ -1,0 +1,209 @@
+# Complete Step-by-Step Guide to Create Lightning Web Component
+
+## Step 1: Open VS Code with Salesforce Extensions
+
+1. Open **Visual Studio Code**
+2. Install **Salesforce Extension Pack** (if not already installed)
+   - Go to Extensions (Ctrl+Shift+X)
+   - Search for "Salesforce Extension Pack"
+   - Click Install
+
+3. **Authorize your Salesforce Org**
+   - Press `Ctrl+Shift+P` (Command Palette)
+   - Type: `SFDX: Authorize an Org`
+   - Select your org type (Production/Sandbox)
+   - Log in through browser
+
+## Step 2: Create the Lightning Web Component
+
+1. In VS Code, press `Ctrl+Shift+P`
+2. Type: `SFDX: Create Lightning Web Component`
+3. Enter component name: `revenueDropOffTable`
+4. Select default directory: `force-app/main/default/lwc`
+
+This creates a folder structure:
+```
+force-app/main/default/lwc/revenueDropOffTable/
+├── revenueDropOffTable.html
+├── revenueDropOffTable.js
+└── revenueDropOffTable.js-meta.xml
+```
+
+## Step 3: Add the HTML File
+
+1. Open `revenueDropOffTable.html`
+2. **Delete all existing content**
+3. Paste this code:
+
+```html
+<template>
+    <div class="slds-card">
+        <div class="slds-card__header slds-grid">
+            <header class="slds-media slds-media_center slds-has-flexi-truncate">
+                <div class="slds-media__body">
+                    <h2 class="slds-card__header-title">
+                        <span>Revenue Drop-Off Analysis</span>
+                    </h2>
+                </div>
+            </header>
+        </div>
+        <div class="slds-card__body slds-card__body_inner">
+            <p class="slds-m-bottom_small"><strong>{summaryText}</strong></p>
+            <lightning-datatable
+                key-field="customerName"
+                data={tableData}
+                columns={columns}
+                hide-checkbox-column
+                show-row-number-column>
+            </lightning-datatable>
+        </div>
+    </div>
+</template>
+```
+
+4. **Save** the file (Ctrl+S)
+
+## Step 4: Add the JavaScript File
+
+1. Open `revenueDropOffTable.js`
+2. **Delete all existing content**
+3. Paste this code:
+
+```javascript
+import { LightningElement, api } from 'lwc';
+
+export default class RevenueDropOffTable extends LightningElement {
+    @api customerNames;
+    @api period1Revenue;
+    @api period2Revenue;
+    @api dropAmount;
+    @api dropPercentage;
+    @api period1Label;
+    @api period2Label;
+    @api summaryText;
+
+    get columns() {
+        return [
+            { label: 'Customer', fieldName: 'customerName', type: 'text' },
+            { label: this.period1Label || 'Period 1', fieldName: 'period1Rev', type: 'text' },
+            { label: this.period2Label || 'Period 2', fieldName: 'period2Rev', type: 'text' },
+            { label: 'Drop Amount', fieldName: 'dropAmt', type: 'text' },
+            { label: 'Drop %', fieldName: 'dropPct', type: 'text' }
+        ];
+    }
+
+    get tableData() {
+        if (!this.customerNames || this.customerNames.length === 0) {
+            return [];
+        }
+
+        return this.customerNames.map((customer, index) => {
+            return {
+                customerName: customer,
+                period1Rev: this.period1Revenue[index],
+                period2Rev: this.period2Revenue[index],
+                dropAmt: this.dropAmount[index],
+                dropPct: this.dropPercentage[index]
+            };
+        });
+    }
+}
+```
+
+4. **Save** the file (Ctrl+S)
+
+## Step 5: Add the Metadata XML File
+
+1. Open `revenueDropOffTable.js-meta.xml`
+2. **Delete all existing content**
+3. Paste this code:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>62.0</apiVersion>
+    <isExposed>true</isExposed>
+    <targets>
+        <target>lightning__FlowScreen</target>
+    </targets>
+    <targetConfigs>
+        <targetConfig targets="lightning__FlowScreen">
+            <property name="customerNames" type="String[]" label="Customer Names" />
+            <property name="period1Revenue" type="String[]" label="Period 1 Revenue" />
+            <property name="period2Revenue" type="String[]" label="Period 2 Revenue" />
+            <property name="dropAmount" type="String[]" label="Drop Amount" />
+            <property name="dropPercentage" type="String[]" label="Drop Percentage" />
+            <property name="period1Label" type="String" label="Period 1 Label" />
+            <property name="period2Label" type="String" label="Period 2 Label" />
+            <property name="summaryText" type="String" label="Summary Text" />
+        </targetConfig>
+    </targetConfigs>
+</LightningComponentBundle>
+```
+
+4. **Save** the file (Ctrl+S)
+
+## Step 6: Deploy to Salesforce
+
+1. **Right-click** on the `revenueDropOffTable` folder
+2. Select **SFDX: Deploy Source to Org**
+3. Wait for deployment to complete (check OUTPUT panel at bottom)
+4. You should see: `Deploy Succeeded`
+
+**Alternative Deployment Method:**
+1. Press `Ctrl+Shift+P`
+2. Type: `SFDX: Deploy This Source to Org`
+3. Wait for success message
+
+## Step 7: Verify Deployment
+
+1. Go to Salesforce Setup
+2. Search for **Lightning Components** in Quick Find
+3. Find `revenueDropOffTable` in the list
+4. It should show as Active
+
+## Step 8: Configure in Agent Builder
+
+Now go to Agentforce Agent Builder:
+
+1. Open your **Sales Insight Assistant** agent
+2. Go to the **Revenue Drop-Off Action**
+3. In the **Output** section, add Component Output:
+   - Click **Add Output** → **Component**
+   - Select Component: `c:revenueDropOffTable`
+   - Map the properties:
+     - `customerNames` → select output variable `Customer Names`
+     - `period1Revenue` → select output variable `Period 1 Revenue`
+     - `period2Revenue` → select output variable `Period 2 Revenue`
+     - `dropAmount` → select output variable `Drop Amount`
+     - `dropPercentage` → select output variable `Drop Percentage`
+     - `period1Label` → select output variable `Period 1 Label`
+     - `period2Label` → select output variable `Period 2 Label`
+     - `summaryText` → select output variable `Summary Text`
+
+4. **Save** the action
+5. **Activate** the agent
+
+## Step 9: Test
+
+Ask the agent: "declining revenue in last 6 months"
+
+You should see a properly formatted Lightning Data Table with sortable columns.
+
+---
+
+## Troubleshooting
+
+**If deployment fails:**
+- Check for syntax errors (VS Code will show red underlines)
+- Make sure all files are saved
+- Check OUTPUT panel for specific error messages
+
+**If component doesn't appear in Agent Builder:**
+- Refresh Agent Builder page
+- Check that `isExposed` is `true` in meta.xml
+- Verify deployment was successful in Setup → Deployment Status
+
+**If table shows no data:**
+- Check that your Apex class returns the list outputs correctly
+- Verify the property names match exactly in LWC and Agent Builder
