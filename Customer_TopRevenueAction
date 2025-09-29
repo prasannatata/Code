@@ -2,18 +2,20 @@ public with sharing class Customer_TopRevenueAction {
 
     // Request wrapper
     public class Request {
-        @InvocableVariable(label='Year') public Integer year;          // optional
-        @InvocableVariable(label='Quarter') public Integer quarter;    // optional (1–4)
-        @InvocableVariable(label='Top N Customers') public Integer limitSize; // optional
+        @InvocableVariable(label='Year') public Integer year;
+        @InvocableVariable(label='Quarter') public Integer quarter;
+        @InvocableVariable(label='Top N Customers') public Integer limitSize;
     }
 
     // Response wrapper
     public class Result {
+        @InvocableVariable public String heading;
         @InvocableVariable public String customer;
         @InvocableVariable public Integer orders;
         @InvocableVariable public Decimal revenue;
 
-        public Result(String cust, Integer ord, Decimal rev) {
+        public Result(String heading, String cust, Integer ord, Decimal rev) {
+            this.heading  = heading;
             this.customer = cust;
             this.orders   = ord;
             this.revenue  = rev;
@@ -55,6 +57,14 @@ public with sharing class Customer_TopRevenueAction {
             endDate   = Date.newInstance(targetYear, 12, 31);
         }
 
+        // Dynamic heading
+        String heading;
+        if (targetQuarter != null) {
+            heading = 'Top ' + maxLimit + ' customers in Q' + targetQuarter + ' ' + targetYear;
+        } else {
+            heading = 'Top ' + maxLimit + ' customers in Year ' + targetYear;
+        }
+
         // Query top N customers
         List<AggregateResult> aggResults = [
             SELECT CustomerName__c cust,
@@ -71,6 +81,7 @@ public with sharing class Customer_TopRevenueAction {
         // Build results
         for (AggregateResult ar : aggResults) {
             results.add(new Result(
+                heading,
                 (String)ar.get('cust'),
                 (Integer)ar.get('orders'),
                 (Decimal)ar.get('totalRevenue')
@@ -81,10 +92,6 @@ public with sharing class Customer_TopRevenueAction {
     }
 }
 
-
-+++++++++++
-
-++++++++++++
 
 
 
