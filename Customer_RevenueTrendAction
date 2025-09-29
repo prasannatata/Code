@@ -37,3 +37,13 @@ public class Customer_RevenueTrendAction {
         return results;
     }
 }
+++++++++++++++
+// Test fetching revenue trend for a specific customer
+List<Customer_RevenueTrendAction.Request> reqs = new List<Customer_RevenueTrendAction.Request>();
+Customer_RevenueTrendAction.Request r = new Customer_RevenueTrendAction.Request();
+r.customerName = 'NYU Langone'; // use one from your dataset
+reqs.add(r);
+
+List<Customer_RevenueTrendAction.Response> res = Customer_RevenueTrendAction.run(reqs);
+System.debug('>>> Customer Revenue Trend: ' + res[0].result);
+
