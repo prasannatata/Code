@@ -88,3 +88,41 @@ List<CustomerAction.Result> results = CustomerAction.run(reqs);
 
 System.debug('RESULT JSON >>> ' + results[0].summaryJson);
 
+
+
+name: FormatCustomerSummary
+type: prompt_template
+input_parameters:
+  - name: summaryJson
+    type: string
+  - name: year
+    type: string
+    optional: true
+  - name: quarter
+    type: string
+    optional: true
+  - name: topN
+    type: string
+    optional: true
+template: |
+  You are a Salesforce AI assistant. The Apex action returned structured JSON of customer metrics.
+
+  Task:
+  - Parse the JSON: {{summaryJson}}
+  - Always format results into a markdown table with the columns: **Customer | Orders | Quantity | Revenue**.
+  - Add a heading at the top:
+    - If `year` and `quarter` provided → "Top {{topN}} Customers in Q{{quarter}} {{year}}"
+    - If only `year` provided → "Top {{topN}} Customers in {{year}}"
+    - Otherwise → "Top Customers"
+
+  Example output:
+
+  ## Top 5 Customers in Q1 2025
+  | Customer       | Orders | Quantity | Revenue   |
+  |----------------|--------|----------|-----------|
+  | Mass General   | 12     | 1,234    | $50,000   |
+  | Johns Hopkins  | 8      | 950      | $38,200   |
+
+  Render only the table + heading (no explanations).
+
+
