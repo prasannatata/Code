@@ -36,9 +36,10 @@ public with sharing class Customer_TopRevenueAction {
                 for (AggregateResult ar : rows) {
                     String custName = (String)ar.get('CustomerName__c');
                     String orderCount = String.valueOf(ar.get('orderCount'));
-                    String revenue = String.valueOf(ar.get('totalRevenue'));
+                    // ✅ Now alias is guaranteed to exist
+                    Decimal revenue = (Decimal)ar.get('totalRevenue');
 
-                    table += custName + ' | ' + orderCount + ' | $' + revenue + '\n';
+                    table += custName + ' | ' + orderCount + ' | $' + revenue.setScale(2) + '\n';
                 }
 
                 res.result = table;
@@ -51,10 +52,11 @@ public with sharing class Customer_TopRevenueAction {
     }
 }
 
+
 List<Customer_TopRevenueAction.Request> reqs = new List<Customer_TopRevenueAction.Request>();
 
 Customer_TopRevenueAction.Request r = new Customer_TopRevenueAction.Request();
-r.limitSize = 5; // top 5 customers
+r.limitSize = 5; // Top 5 customers
 reqs.add(r);
 
 List<Customer_TopRevenueAction.Response> res = Customer_TopRevenueAction.run(reqs);
