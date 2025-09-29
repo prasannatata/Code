@@ -16,7 +16,8 @@ public with sharing class Customer_RevenueTrendAction {
         for (Request r : requests) {
             Response res = new Response();
             
-            String query = 'SELECT OrderRefNumber__c, CustomerName__c, Revenue__c, OrderPODate__c ' +
+            // FIX: added OrderStatus__c to avoid missing field issue
+            String query = 'SELECT OrderRefNumber__c, CustomerName__c, Revenue__c, OrderPODate__c, OrderStatus__c ' +
                            'FROM Realistic_OrderLine_Datacsv__dlm ' +
                            'WHERE CustomerName__c = \'' + String.escapeSingleQuotes(r.customerName) + '\'';
 
@@ -34,12 +35,13 @@ public with sharing class Customer_RevenueTrendAction {
     }
 }
 
-
-
 List<Customer_RevenueTrendAction.Request> reqs = new List<Customer_RevenueTrendAction.Request>();
 Customer_RevenueTrendAction.Request r = new Customer_RevenueTrendAction.Request();
-r.customerName = 'NYU Langone'; // must exist in your dataset
+r.customerName = 'NYU Langone';  // must match a CustomerName__c from your dataset
 reqs.add(r);
 
 List<Customer_RevenueTrendAction.Response> res = Customer_RevenueTrendAction.run(reqs);
 System.debug('>>> Customer Revenue Trend: ' + res[0].result);
+
+
+
