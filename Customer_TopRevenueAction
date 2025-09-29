@@ -1,131 +1,118 @@
 public with sharing class Customer_TopRevenueAction {
 
-    // ===== Request DTO =====
+    // Request wrapper
     public class Request {
-        @InvocableVariable(label='Year') public Integer year;
-        @InvocableVariable(label='Quarter') public Integer quarter;   // optional
-        @InvocableVariable(label='Top N Customers') public Integer limitSize; // renamed from limit ✅
+        @InvocableVariable(label='Year') public Integer year;          // optional
+        @InvocableVariable(label='Quarter') public Integer quarter;    // optional (1–4)
+        @InvocableVariable(label='Top N Customers') public Integer limitSize; // optional
     }
 
-    // ===== Response DTO =====
+    // Response wrapper
     public class Result {
-        @InvocableVariable public String summary;
-        @InvocableVariable public String table;
         @InvocableVariable public String customer;
         @InvocableVariable public Integer orders;
         @InvocableVariable public Decimal revenue;
 
-        public Result() {}
         public Result(String cust, Integer ord, Decimal rev) {
             this.customer = cust;
-            this.orders = ord;
-            this.revenue = rev;
+            this.orders   = ord;
+            this.revenue  = rev;
         }
     }
 
-    // ===== Invocable Method =====
     @InvocableMethod(label='Get Top Customers by Revenue')
-    public static List<Result> run(List<Request> reqs) {
-        List<Result> out = new List<Result>();
+    public static List<Result> run(List<Request> requests) {
+        List<Result> results = new List<Result>();
+        if (requests.isEmpty()) return results;
 
-        for (Request r : reqs) {
-            if (r.year == null) {
-                Result err = new Result();
-                err.summary = '⚠️ Missing year input';
-                out.add(err);
-                continue;
+        Request req = requests[0];
+
+        // Defaults
+        Integer targetYear    = (req.year != null) ? req.year : Date.today().year();
+        Integer targetQuarter = req.quarter; 
+        Integer maxLimit      = (req.limitSize != null && req.limitSize > 0) ? req.limitSize : 5;
+
+        Date startDate;
+        Date endDate;
+
+        // Quarter-specific or full year
+        if (targetQuarter != null) {
+            if (targetQuarter == 1) {
+                startDate = Date.newInstance(targetYear, 1, 1);
+                endDate   = Date.newInstance(targetYear, 3, 31);
+            } else if (targetQuarter == 2) {
+                startDate = Date.newInstance(targetYear, 4, 1);
+                endDate   = Date.newInstance(targetYear, 6, 30);
+            } else if (targetQuarter == 3) {
+                startDate = Date.newInstance(targetYear, 7, 1);
+                endDate   = Date.newInstance(targetYear, 9, 30);
+            } else if (targetQuarter == 4) {
+                startDate = Date.newInstance(targetYear, 10, 1);
+                endDate   = Date.newInstance(targetYear, 12, 31);
             }
-
-            Date startDate;
-            Date endDate;
-
-            // Quarter-based filtering
-            if (r.quarter != null) {
-                if (r.quarter == 1) {
-                    startDate = Date.newInstance(r.year, 1, 1);
-                    endDate   = Date.newInstance(r.year, 3, 31);
-                } else if (r.quarter == 2) {
-                    startDate = Date.newInstance(r.year, 4, 1);
-                    endDate   = Date.newInstance(r.year, 6, 30);
-                } else if (r.quarter == 3) {
-                    startDate = Date.newInstance(r.year, 7, 1);
-                    endDate   = Date.newInstance(r.year, 9, 30);
-                } else if (r.quarter == 4) {
-                    startDate = Date.newInstance(r.year, 10, 1);
-                    endDate   = Date.newInstance(r.year, 12, 31);
-                }
-            } else {
-                startDate = Date.newInstance(r.year, 1, 1);
-                endDate   = Date.newInstance(r.year, 12, 31);
-            }
-
-            Integer topN = (r.limitSize != null && r.limitSize > 0) ? r.limitSize : 5;
-
-            // Query
-            List<Realistic_OrderLine_Datacsv__dlm> rows = [
-                SELECT CustomerName__c, Revenue__c, OrderCreateDate__c
-                FROM Realistic_OrderLine_Datacsv__dlm
-                WHERE OrderCreateDate__c >= :startDate
-                  AND OrderCreateDate__c <= :endDate
-            ];
-
-            // Aggregate
-            Map<String, Integer> orderCount = new Map<String, Integer>();
-            Map<String, Decimal> revenueTotal = new Map<String, Decimal>();
-
-            for (Realistic_OrderLine_Datacsv__dlm rdl : rows) {
-                String cust = (rdl.CustomerName__c != null) ? rdl.CustomerName__c : 'Unknown';
-                orderCount.put(cust, orderCount.containsKey(cust) ? orderCount.get(cust) + 1 : 1);
-                revenueTotal.put(cust, revenueTotal.containsKey(cust) ? revenueTotal.get(cust) + rdl.Revenue__c : rdl.Revenue__c);
-            }
-
-            // Sort by revenue
-            List<String> custNames = new List<String>(revenueTotal.keySet());
-            custNames.sort(new MapSorter(revenueTotal));
-
-            // Build results
-            String table = 'Customer | Orders | Revenue \n--- | --- | --- \n';
-            Integer added = 0;
-
-            for (String cust : custNames) {
-                if (added >= topN) break;
-                table += cust + ' | ' + orderCount.get(cust) + ' | $' + revenueTotal.get(cust) + '\n';
-
-                Result res = new Result(cust, orderCount.get(cust), revenueTotal.get(cust));
-                res.table = table;
-                res.summary = '📊 Top ' + topN + ' customers in ' +
-                              (r.quarter != null ? 'Q' + r.quarter + ' ' + r.year : 'Year ' + r.year);
-                out.add(res);
-
-                added++;
-            }
+        } else {
+            startDate = Date.newInstance(targetYear, 1, 1);
+            endDate   = Date.newInstance(targetYear, 12, 31);
         }
-        return out;
-    }
 
-    // Comparator for sorting
-    public class MapSorter implements Comparator<String> {
-        Map<String, Decimal> base;
-        public MapSorter(Map<String, Decimal> base) { this.base = base; }
-        public Integer compare(String a, String b) {
-            Decimal revA = base.get(a);
-            Decimal revB = base.get(b);
-            if (revA == revB) return 0;
-            return (revA > revB) ? -1 : 1;
+        // Query top N customers
+        List<AggregateResult> aggResults = [
+            SELECT CustomerName__c cust,
+                   COUNT(Id) orders,
+                   SUM(Revenue__c) totalRevenue
+            FROM Realistic_OrderLine_Datacsv__dlm
+            WHERE OrderCreateDate__c >= :startDate
+              AND OrderCreateDate__c <= :endDate
+            GROUP BY CustomerName__c
+            ORDER BY SUM(Revenue__c) DESC
+            LIMIT :maxLimit
+        ];
+
+        // Build results
+        for (AggregateResult ar : aggResults) {
+            results.add(new Result(
+                (String)ar.get('cust'),
+                (Integer)ar.get('orders'),
+                (Decimal)ar.get('totalRevenue')
+            ));
         }
+
+        return results;
     }
 }
 
 
-Customer_TopRevenueAction.Request req = new Customer_TopRevenueAction.Request();
-req.year = 2025;
-req.quarter = 1;
-req.limitSize = 5;  // renamed ✅
++++++++++++
 
-List<Customer_TopRevenueAction.Request> reqs = new List<Customer_TopRevenueAction.Request>{ req };
-List<Customer_TopRevenueAction.Result> results = Customer_TopRevenueAction.run(reqs);
+++++++++++++
 
-for (Customer_TopRevenueAction.Result r : results) {
-    System.debug(r.summary);
-    System.debug(r.table);
-}
+
+
+// Example 1: Top 5 customers in current year
+List<Customer_TopRevenueAction.Request> reqs = new List<Customer_TopRevenueAction.Request>();
+Customer_TopRevenueAction.Request r = new Customer_TopRevenueAction.Request();
+r.year = Date.today().year();
+r.limitSize = 5;
+reqs.add(r);
+
+List<Customer_TopRevenueAction.Result> res = Customer_TopRevenueAction.run(reqs);
+System.debug(res);
+
+// Example 2: Top 3 customers in Q1 2025
+List<Customer_TopRevenueAction.Request> reqs = new List<Customer_TopRevenueAction.Request>();
+Customer_TopRevenueAction.Request r = new Customer_TopRevenueAction.Request();
+r.year = 2025;
+r.quarter = 1;
+r.limitSize = 3;
+reqs.add(r);
+
+List<Customer_TopRevenueAction.Result> res = Customer_TopRevenueAction.run(reqs);
+System.debug(res);
+
+// Example 3: Default year (current year), default top 5
+List<Customer_TopRevenueAction.Request> reqs = new List<Customer_TopRevenueAction.Request>();
+Customer_TopRevenueAction.Request r = new Customer_TopRevenueAction.Request();
+reqs.add(r);
+
+List<Customer_TopRevenueAction.Result> res = Customer_TopRevenueAction.run(reqs);
+System.debug(res);
