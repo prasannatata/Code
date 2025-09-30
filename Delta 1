@@ -203,3 +203,208 @@ public with sharing class Customer_RevenueDropOffAction {
 rm -rf force-app/main/default/lightningTypes
 sf project deploy start --source-dir force-app/main/default/classes
 sf project deploy start --source-dir force-app/main/default/lwc
+
+
+
+
+=====================
+import { LightningElement, api } from 'lwc';
+
+const COLUMNS = [
+    {
+        label: 'Customer',
+        fieldName: 'customerName',
+        type: 'text',
+        sortable: true,
+        cellAttributes: { class: 'slds-text-title_bold' }
+    },
+    {
+        label: 'Parent Customer',
+        fieldName: 'parentCustomer',
+        type: 'text',
+        sortable: true
+    },
+    {
+        label: 'Period 1 Revenue',
+        fieldName: 'period1Revenue',
+        type: 'currency',
+        sortable: true,
+        typeAttributes: {
+            currencyCode: 'USD',
+            currencyDisplayAs: 'symbol',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        },
+        cellAttributes: { alignment: 'right' }
+    },
+    {
+        label: 'Period 2 Revenue',
+        fieldName: 'period2Revenue',
+        type: 'currency',
+        sortable: true,
+        typeAttributes: {
+            currencyCode: 'USD',
+            currencyDisplayAs: 'symbol',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        },
+        cellAttributes: { alignment: 'right' }
+    },
+    {
+        label: 'Drop Amount',
+        fieldName: 'dropAmount',
+        type: 'currency',
+        sortable: true,
+        typeAttributes: {
+            currencyCode: 'USD',
+            currencyDisplayAs: 'symbol',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        },
+        cellAttributes: { 
+            alignment: 'right',
+            class: 'slds-text-color_error'
+        }
+    },
+    {
+        label: 'Drop %',
+        fieldName: 'dropPercentage',
+        type: 'text',
+        sortable: true,
+        cellAttributes: { 
+            alignment: 'center',
+            class: 'slds-text-color_error slds-text-title_bold'
+        }
+    }
+];
+
+export default class RevenueDropOffTable extends LightningElement {
+    @api value; // This will receive data from Agentforce
+    
+    columns = COLUMNS;
+    tableData = [];
+    sortedBy = 'dropAmount';
+    sortedDirection = 'desc';
+    
+    isLoading = false;
+    error = '';
+    
+    totalCustomers = 0;
+    totalRevenueLost = '$0.00';
+    avgDrop = '$0.00';
+
+    // Computed properties
+    get hasData() {
+        return this.tableData && this.tableData.length > 0;
+    }
+
+    get noData() {
+        return !this.isLoading && !this.error && this.tableData.length === 0;
+    }
+
+    // Watch for data changes
+    connectedCallback() {
+        this.processData();
+    }
+
+    renderedCallback() {
+        this.processData();
+    }
+
+    processData() {
+        if (!this.value || !Array.isArray(this.value)) {
+            this.tableData = [];
+            this.calculateSummary();
+            return;
+        }
+
+        try {
+            this.tableData = this.value.map(item => ({
+                customerId: item.customerId || item.customerName,
+                customerName: item.customerName || 'Unknown Customer',
+                parentCustomer: item.parentCustomer || '',
+                period1Revenue: item.period1Revenue || 0,
+                period2Revenue: item.period2Revenue || 0,
+                dropAmount: item.dropAmount || 0,
+                dropPercentage: item.dropPercentage || '0%'
+            }));
+
+            this.calculateSummary();
+            this.error = '';
+        } catch (error) {
+            console.error('Error processing revenue drop-off data:', error);
+            this.error = 'Error processing data: ' + error.message;
+            this.tableData = [];
+        }
+    }
+
+    calculateSummary() {
+        if (!this.tableData || this.tableData.length === 0) {
+            this.totalCustomers = 0;
+            this.totalRevenueLost = '$0.00';
+            this.avgDrop = '$0.00';
+            return;
+        }
+
+        this.totalCustomers = this.tableData.length;
+        
+        const totalLost = this.tableData.reduce((sum, customer) => {
+            return sum + (customer.dropAmount || 0);
+        }, 0);
+
+        this.totalRevenueLost = new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+        }).format(totalLost);
+
+        const avgDropAmount = totalLost / this.totalCustomers;
+        this.avgDrop = new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+        }).format(avgDropAmount);
+    }
+
+    handleSort(event) {
+        const { fieldName: sortedBy, sortDirection } = event.detail;
+        const cloneData = [...this.tableData];
+
+        cloneData.sort(this.sortBy(sortedBy, sortDirection === 'asc' ? 1 : -1));
+        this.tableData = cloneData;
+        this.sortedDirection = sortDirection;
+        this.sortedBy = sortedBy;
+    }
+
+    sortBy(field, reverse) {
+        return (a, b) => {
+            let aVal = a[field] || '';
+            let bVal = b[field] || '';
+            
+            // Handle percentage strings
+            if (typeof aVal === 'string' && aVal.includes('%')) {
+                aVal = parseFloat(aVal.replace('%', ''));
+            }
+            if (typeof bVal === 'string' && bVal.includes('%')) {
+                bVal = parseFloat(bVal.replace('%', ''));
+            }
+            
+            return reverse * ((aVal > bVal) - (bVal > aVal));
+        };
+    }
+
+    handleCellClick(event) {
+        const customerId = event.detail.row.customerId;
+        console.log('Customer clicked:', customerId);
+        
+        // You can add navigation logic here if needed
+        // For example, navigate to the customer record
+    }
+}
+# Deploy the corrected LWC
+sf project deploy start --source-dir force-app/main/default/lwc
+
+# Deploy the Apex class 
+sf project deploy start --source-dir force-app/main/default/classes
