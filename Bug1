@@ -1,6 +1,5 @@
 public with sharing class Customer_TopRevenueAdvancedAction {
 
-    // Input wrapper
     public class Request {
         @InvocableVariable(label='Number of Customers' required=false)
         public Integer limitSize;
@@ -21,7 +20,6 @@ public with sharing class Customer_TopRevenueAdvancedAction {
         public String orderStatus;
     }
 
-    // Output wrapper
     public class Response {
         @InvocableVariable(label='Customer Name')
         public String customerName;
@@ -32,62 +30,48 @@ public with sharing class Customer_TopRevenueAdvancedAction {
         @InvocableVariable(label='Total Revenue')
         public Decimal totalRevenue;
 
-        @InvocableVariable(label='Year')
-        public Integer year;
-
-        @InvocableVariable(label='Quarter')
-        public Integer quarter;
-
         @InvocableVariable(label='Summary')
         public String summary;
     }
 
-    @InvocableMethod(label='Top Revenue Customers' description='List top customers ranked by total revenue with filters')
+    @InvocableMethod(label='Top Revenue Customers' description='List top customers with filters')
     public static List<Response> run(List<Request> reqs) {
         Request req = (reqs != null && !reqs.isEmpty()) ? reqs[0] : new Request();
 
         Integer limitValue = (req.limitSize != null && req.limitSize > 0) ? req.limitSize : 5;
 
-        String soql = 'SELECT CustomerName__c custName, COUNT(Id) orderCount, SUM(Revenue__c) totalRevenue ' +
-                      'FROM Realistic_OrderLine_Datacsv__dlm ';
+        String baseQuery = 'SELECT CustomerName__c custName, COUNT(Id) orderCount, SUM(Revenue__c) totalRevenue ' +
+                           'FROM Realistic_OrderLine_Datacsv__dlm ';
 
         List<String> filters = new List<String>();
 
-        // Year + Quarter filter
         if (req.year != null) {
             filters.add('CALENDAR_YEAR(OrderCreateDate__c) = ' + req.year);
         }
         if (req.quarter != null) {
             filters.add('CALENDAR_QUARTER(OrderCreateDate__c) = ' + req.quarter);
         }
-
-        // Vendor filter
         if (String.isNotBlank(req.vendor)) {
-            filters.add('Vendor__c = :req.vendor');
+            filters.add('Vendor__c = \'' + String.escapeSingleQuotes(req.vendor) + '\'');
         }
-
-        // Modality filter
         if (String.isNotBlank(req.modality)) {
-            filters.add('Modality__c = :req.modality');
+            filters.add('Modality__c = \'' + String.escapeSingleQuotes(req.modality) + '\'');
         }
-
-        // Order Status filter
         if (String.isNotBlank(req.orderStatus)) {
-            filters.add('OrderStatus__c = :req.orderStatus');
+            filters.add('OrderStatus__c = \'' + String.escapeSingleQuotes(req.orderStatus) + '\'');
         }
 
-        // Add WHERE if filters exist
         if (!filters.isEmpty()) {
-            soql += 'WHERE ' + String.join(filters, ' AND ') + ' ';
+            baseQuery += 'WHERE ' + String.join(filters, ' AND ') + ' ';
         }
 
-        soql += 'GROUP BY CustomerName__c ' +
-                'ORDER BY SUM(Revenue__c) DESC ' +
-                'LIMIT :limitValue';
+        baseQuery += 'GROUP BY CustomerName__c ' +
+                     'ORDER BY SUM(Revenue__c) DESC ' +
+                     'LIMIT ' + limitValue;
 
-        // Run query
-        List<AggregateResult> rows = Database.query(soql);
+        System.debug('🔥 Final SOQL: ' + baseQuery);
 
+        List<AggregateResult> rows = Database.query(baseQuery);
         List<Response> results = new List<Response>();
 
         for (AggregateResult ar : rows) {
@@ -95,10 +79,7 @@ public with sharing class Customer_TopRevenueAdvancedAction {
             r.customerName = (String) ar.get('custName');
             r.orderCount   = (Integer) ar.get('orderCount');
             r.totalRevenue = (Decimal) ar.get('totalRevenue');
-            r.year = req.year;
-            r.quarter = req.quarter;
 
-            // Conversational style summary
             r.summary = '📊 ' + r.customerName + ' generated $' + r.totalRevenue.setScale(2) +
                         ' from ' + r.orderCount + ' orders' +
                         (req.year != null ? ' in ' + req.year : '') +
@@ -109,11 +90,9 @@ public with sharing class Customer_TopRevenueAdvancedAction {
                         '.';
             results.add(r);
         }
-
         return results;
     }
 }
-
 Customer_TopRevenueAdvancedAction.Request req = new Customer_TopRevenueAdvancedAction.Request();
 req.limitSize = 5;
 req.year = 2025;
@@ -125,7 +104,6 @@ req.orderStatus = 'Completed';
 List<Customer_TopRevenueAdvancedAction.Request> inputs = new List<Customer_TopRevenueAdvancedAction.Request>{ req };
 List<Customer_TopRevenueAdvancedAction.Response> outputs = Customer_TopRevenueAdvancedAction.run(inputs);
 
-System.debug('=== Top Revenue Customers with Filters ===');
 for (Customer_TopRevenueAdvancedAction.Response r : outputs) {
     System.debug(r.summary);
 }
