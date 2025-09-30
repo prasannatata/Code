@@ -5,9 +5,11 @@ sf project deploy start --manifest manifest/package.xml
     <apiVersion>64.0</apiVersion>
     <isExposed>true</isExposed>
     <masterLabel>Revenue Drop-Off Table</masterLabel>
+
     <targets>
         <target>lightning__AgentforceOutput</target>
     </targets>
+
     <targetConfigs>
         <targetConfig targets="lightning__AgentforceOutput">
             <sourceType name="lightning__listType" itemTypeName="c__Customer_RevenueDropOffAction.DropOffWrapper"/>
