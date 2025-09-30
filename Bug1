@@ -42,77 +42,71 @@ public with sharing class Customer_TopRevenueAdvancedAction {
         public String summary;
     }
 
-    @InvocableMethod(label='Top Revenue Customers Advanced'
-                     description='List top customers by revenue with optional filters (Year, Quarter, Vendor, Modality, Order Status)')
+    @InvocableMethod(label='Top Revenue Customers' description='List top customers ranked by total revenue with filters')
     public static List<Response> run(List<Request> reqs) {
-        List<Response> results = new List<Response>();
-        if (reqs == null || reqs.isEmpty()) return results;
-
-        Request req = reqs[0];
+        Request req = (reqs != null && !reqs.isEmpty()) ? reqs[0] : new Request();
 
         Integer limitValue = (req.limitSize != null && req.limitSize > 0) ? req.limitSize : 5;
 
-        // Base SOQL
-        String baseQuery = 'SELECT CustomerName__c custName, COUNT(Id) orderCount, SUM(Revenue__c) totalRevenue, ' +
-                           'CALENDAR_YEAR(OrderDate__c) yr, CALENDAR_QUARTER(OrderDate__c) qtr ' +
-                           'FROM Realistic_OrderLine_Datacsv__dlm ';
+        String soql = 'SELECT CustomerName__c custName, COUNT(Id) orderCount, SUM(Revenue__c) totalRevenue ' +
+                      'FROM Realistic_OrderLine_Datacsv__dlm ';
 
-        // Apply filters dynamically
         List<String> filters = new List<String>();
+
+        // Year + Quarter filter
         if (req.year != null) {
-            filters.add('CALENDAR_YEAR(OrderDate__c) = :req.year');
+            filters.add('CALENDAR_YEAR(OrderCreateDate__c) = ' + req.year);
         }
         if (req.quarter != null) {
-            filters.add('CALENDAR_QUARTER(OrderDate__c) = :req.quarter');
+            filters.add('CALENDAR_QUARTER(OrderCreateDate__c) = ' + req.quarter);
         }
+
+        // Vendor filter
         if (String.isNotBlank(req.vendor)) {
             filters.add('Vendor__c = :req.vendor');
         }
+
+        // Modality filter
         if (String.isNotBlank(req.modality)) {
             filters.add('Modality__c = :req.modality');
         }
+
+        // Order Status filter
         if (String.isNotBlank(req.orderStatus)) {
             filters.add('OrderStatus__c = :req.orderStatus');
         }
 
+        // Add WHERE if filters exist
         if (!filters.isEmpty()) {
-            baseQuery += 'WHERE ' + String.join(filters, ' AND ') + ' ';
+            soql += 'WHERE ' + String.join(filters, ' AND ') + ' ';
         }
 
-        baseQuery += 'GROUP BY CustomerName__c, CALENDAR_YEAR(OrderDate__c), CALENDAR_QUARTER(OrderDate__c) ' +
-                     'ORDER BY SUM(Revenue__c) DESC ' +
-                     'LIMIT :limitValue';
+        soql += 'GROUP BY CustomerName__c ' +
+                'ORDER BY SUM(Revenue__c) DESC ' +
+                'LIMIT :limitValue';
 
         // Run query
-        List<AggregateResult> rows = Database.query(baseQuery);
+        List<AggregateResult> rows = Database.query(soql);
 
-        // Build results + conversational summary
-        Integer rank = 1;
+        List<Response> results = new List<Response>();
+
         for (AggregateResult ar : rows) {
             Response r = new Response();
             r.customerName = (String) ar.get('custName');
             r.orderCount   = (Integer) ar.get('orderCount');
             r.totalRevenue = (Decimal) ar.get('totalRevenue');
-            r.year         = (Integer) ar.get('yr');
-            r.quarter      = (Integer) ar.get('qtr');
+            r.year = req.year;
+            r.quarter = req.quarter;
 
-            // Conversational summary (for demo)
-            if (rank == 1) {
-                r.summary = '📊 ' + r.customerName + ' leads the list with $' + r.totalRevenue.setScale(2) +
-                            ' across ' + r.orderCount + ' orders.';
-            } else {
-                r.summary = rank + '. ' + r.customerName + ' has $' + r.totalRevenue.setScale(2) +
-                            ' revenue from ' + r.orderCount + ' orders.';
-            }
-
-            results.add(r);
-            rank++;
-        }
-
-        // If no data found
-        if (results.isEmpty()) {
-            Response r = new Response();
-            r.summary = '⚠️ No revenue data found for the given filters. Try adjusting year, quarter, or vendor.';
+            // Conversational style summary
+            r.summary = '📊 ' + r.customerName + ' generated $' + r.totalRevenue.setScale(2) +
+                        ' from ' + r.orderCount + ' orders' +
+                        (req.year != null ? ' in ' + req.year : '') +
+                        (req.quarter != null ? ' Q' + req.quarter : '') +
+                        (String.isNotBlank(req.vendor) ? ' for Vendor ' + req.vendor : '') +
+                        (String.isNotBlank(req.modality) ? ' (Modality: ' + req.modality + ')' : '') +
+                        (String.isNotBlank(req.orderStatus) ? ' [' + req.orderStatus + ']' : '') +
+                        '.';
             results.add(r);
         }
 
@@ -120,29 +114,18 @@ public with sharing class Customer_TopRevenueAdvancedAction {
     }
 }
 
-
-// Build input
 Customer_TopRevenueAdvancedAction.Request req = new Customer_TopRevenueAdvancedAction.Request();
-req.limitSize = 5;        // Top 5 customers
-req.year = 2025;          // Filter by year
-req.quarter = 2;          // Filter by Q2
-req.vendor = null;        // Optional - try "Siemens" etc.
-req.modality = null;      // Optional - try "CT" etc.
-req.orderStatus = null;   // Optional - e.g. "Completed"
+req.limitSize = 5;
+req.year = 2025;
+req.quarter = 2;
+req.vendor = 'Siemens';
+req.modality = 'CT';
+req.orderStatus = 'Completed';
 
-// Run action
 List<Customer_TopRevenueAdvancedAction.Request> inputs = new List<Customer_TopRevenueAdvancedAction.Request>{ req };
 List<Customer_TopRevenueAdvancedAction.Response> outputs = Customer_TopRevenueAdvancedAction.run(inputs);
 
-// Log results
-System.debug('=== Top Revenue Customers (Test) ===');
+System.debug('=== Top Revenue Customers with Filters ===');
 for (Customer_TopRevenueAdvancedAction.Response r : outputs) {
-    System.debug(
-        'Customer: ' + r.customerName +
-        ' | Orders: ' + r.orderCount +
-        ' | Revenue: $' + r.totalRevenue +
-        ' | Year: ' + r.year +
-        ' | Q' + r.quarter +
-        ' | Summary: ' + r.summary
-    );
+    System.debug(r.summary);
 }
