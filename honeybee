@@ -1,9 +1,6 @@
-sf project deploy start --manifest manifest/package.xml
-
-
-
 public with sharing class Customer_RevenueDropOffAction {
 
+    // Input request from Agentforce
     public class Request {
         @InvocableVariable(label='Period 1 Start Date (earlier period)')
         public Date period1Start;
@@ -21,14 +18,16 @@ public with sharing class Customer_RevenueDropOffAction {
         public Integer topN = 20;
     }
 
+    // Output wrapper returned to Agentforce
     public class Response {
-        @InvocableVariable(label='Result')
+        @InvocableVariable(label='Result Message')
         public String result;
 
         @InvocableVariable(label='Drop Off Records')
         public List<DropOffRecord> dropOffRecords;
     }
 
+    // Inner record for each customer drop-off
     public class DropOffRecord implements Comparable {
         @InvocableVariable(label='Customer Name')
         public String customerName;
@@ -45,6 +44,7 @@ public with sharing class Customer_RevenueDropOffAction {
         @InvocableVariable(label='Drop Percent')
         public Decimal dropPercent;
 
+        // Sorting by drop amount (largest drop first)
         public Integer compareTo(Object other) {
             DropOffRecord otherRec = (DropOffRecord) other;
             if (dropAmount > otherRec.dropAmount) return -1;
@@ -61,12 +61,11 @@ public with sharing class Customer_RevenueDropOffAction {
             Response res = new Response();
             res.dropOffRecords = new List<DropOffRecord>();
 
-            // Default or provided dates
+            // Default to current vs previous quarter if dates are not given
             Date period1Start, period1End, period2Start, period2End;
             String period1Label, period2Label;
 
             if (r.period1Start == null || r.period2Start == null) {
-                // Default: compare current quarter vs previous quarter
                 Date today = Date.today();
                 Integer currentYear = today.year();
                 Integer currentQuarter = ((today.month() - 1) / 3) + 1;
@@ -79,17 +78,18 @@ public with sharing class Customer_RevenueDropOffAction {
                 }
 
                 period1Start = Date.newInstance(prevYear, ((prevQuarter - 1) * 3) + 1, 1);
-                period1End   = period1Start.addMonths(3).addDays(-1);
+                period1End = period1Start.addMonths(3).addDays(-1);
+
                 period2Start = Date.newInstance(currentYear, ((currentQuarter - 1) * 3) + 1, 1);
-                period2End   = period2Start.addMonths(3).addDays(-1);
+                period2End = period2Start.addMonths(3).addDays(-1);
 
                 period1Label = 'Q' + prevQuarter + ' ' + prevYear;
                 period2Label = 'Q' + currentQuarter + ' ' + currentYear;
             } else {
                 period1Start = r.period1Start;
-                period1End   = r.period1End;
+                period1End = r.period1End;
                 period2Start = r.period2Start;
-                period2End   = r.period2End;
+                period2End = r.period2End;
 
                 period1Label = period1Start.format() + ' to ' + period1End.format();
                 period2Label = period2Start.format() + ' to ' + period2End.format();
@@ -118,6 +118,7 @@ public with sharing class Customer_RevenueDropOffAction {
             for (AggregateResult ar : period1Results) {
                 period1RevMap.put((String) ar.get('CustomerName__c'), (Decimal) ar.get('totalRev'));
             }
+
             for (AggregateResult ar : period2Results) {
                 period2RevMap.put((String) ar.get('CustomerName__c'), (Decimal) ar.get('totalRev'));
             }
@@ -130,11 +131,11 @@ public with sharing class Customer_RevenueDropOffAction {
 
                 if (rev2 < rev1) {
                     DropOffRecord rec = new DropOffRecord();
-                    rec.customerName  = customer;
+                    rec.customerName = customer;
                     rec.period1Revenue = rev1;
                     rec.period2Revenue = rev2;
-                    rec.dropAmount    = rev1 - rev2;
-                    rec.dropPercent   = ((rev1 - rev2) / rev1) * 100;
+                    rec.dropAmount = rev1 - rev2;
+                    rec.dropPercent = ((rev1 - rev2) / rev1) * 100;
                     dropOffs.add(rec);
                 }
             }
@@ -142,14 +143,16 @@ public with sharing class Customer_RevenueDropOffAction {
             // Sort by drop amount
             dropOffs.sort();
 
-            // ✅ FIXED: correctly assign subList result
-            if (!dropOffs.isEmpty()) {
-                dropOffs = dropOffs.subList(0, Math.min(r.topN, dropOffs.size()));
-                res.dropOffRecords.addAll(dropOffs);
-                res.result = 'Found ' + dropOffs.size() + 
-                             ' customers with revenue decline between ' + period1Label + ' and ' + period2Label;
+            // Trim to Top N
+            Integer displayCount = Math.min(r.topN, dropOffs.size());
+            if (displayCount > 0) {
+                res.dropOffRecords.addAll(dropOffs.subList(0, displayCount));
+                res.result = 'Found ' + displayCount + 
+                             ' customers with revenue decline between ' + 
+                             period1Label + ' and ' + period2Label;
             } else {
-                res.result = 'No revenue drop-offs detected between ' + period1Label + ' and ' + period2Label;
+                res.result = 'No revenue drop-offs detected between ' + 
+                             period1Label + ' and ' + period2Label;
             }
 
             results.add(res);
@@ -158,3 +161,43 @@ public with sharing class Customer_RevenueDropOffAction {
         return results;
     }
 }
+
+
+
+// Create a test Request
+List<Customer_RevenueDropOffAction.Request> requests = new List<Customer_RevenueDropOffAction.Request>();
+
+Customer_RevenueDropOffAction.Request req = new Customer_RevenueDropOffAction.Request();
+
+// Example: last quarter vs current quarter
+req.period1Start = Date.today().addMonths(-6);  // 6 months ago
+req.period1End   = Date.today().addMonths(-3);  // 3 months ago
+req.period2Start = Date.today().addMonths(-3);  // 3 months ago
+req.period2End   = Date.today();                // today
+req.topN = 10;
+
+requests.add(req);
+
+// Run the Apex Invocable method
+List<Customer_RevenueDropOffAction.Response> responses = 
+    Customer_RevenueDropOffAction.run(requests);
+
+// Debug results
+for (Customer_RevenueDropOffAction.Response res : responses) {
+    System.debug('Result Message: ' + res.result);
+
+    if (res.dropOffRecords != null && !res.dropOffRecords.isEmpty()) {
+        for (Customer_RevenueDropOffAction.DropOffRecord rec : res.dropOffRecords) {
+            System.debug('--- DropOff ---');
+            System.debug('Customer: ' + rec.customerName);
+            System.debug('Period1 Revenue: ' + rec.period1Revenue);
+            System.debug('Period2 Revenue: ' + rec.period2Revenue);
+            System.debug('Drop Amount: ' + rec.dropAmount);
+            System.debug('Drop %: ' + rec.dropPercent);
+        }
+    } else {
+        System.debug('⚠️ No drop-offs found.');
+    }
+}
+
+
