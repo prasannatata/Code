@@ -1,19 +1,281 @@
-sf project deploy start --manifest manifest/package.xml
+Perfect 👍 let’s lock this down. Here’s the **final working setup** you can copy-paste into your project.
 
+---
+
+## 📂 Folder Structure
+
+```
+force-app/main/default/
+  classes/
+    DropOffWrapper.cls
+    DropOffWrapper.cls-meta.xml
+    Customer_RevenueDropOffAction.cls
+    Customer_RevenueDropOffAction.cls-meta.xml
+
+  lwc/
+    revenueDropOffTable/
+      revenueDropOffTable.html
+      revenueDropOffTable.js
+      revenueDropOffTable.js-meta.xml
+      revenueDropOffTable.css   (optional)
+
+  lightningTypes/
+    RevenueDropOffResponse/
+      schema.json
+      renderer.json
+```
+
+---
+
+## 🟢 Apex Classes
+
+**DropOffWrapper.cls**
+
+```apex
+global class DropOffWrapper {
+    @InvocableVariable(label='Customer Name')
+    public String customerName;
+
+    @InvocableVariable(label='Period 1 Revenue')
+    public String period1Revenue;
+
+    @InvocableVariable(label='Period 2 Revenue')
+    public String period2Revenue;
+
+    @InvocableVariable(label='Drop Amount')
+    public String dropAmount;
+
+    @InvocableVariable(label='Drop Percentage')
+    public String dropPercentage;
+}
+```
+
+**Customer_RevenueDropOffAction.cls**
+
+```apex
+public with sharing class Customer_RevenueDropOffAction {
+
+    public class Request {
+        @InvocableVariable(label='Period 1 Start Date (earlier period)')
+        public Date period1Start;
+        @InvocableVariable(label='Period 1 End Date')
+        public Date period1End;
+
+        @InvocableVariable(label='Period 2 Start Date (later period)')
+        public Date period2Start;
+        @InvocableVariable(label='Period 2 End Date')
+        public Date period2End;
+
+        @InvocableVariable(label='Number of Top Customers')
+        public Integer topN = 20;
+    }
+
+    public class Response {
+        @InvocableVariable(label='Summary Text')
+        public String summaryText;
+
+        @InvocableVariable(label='Drop Off Records')
+        public List<DropOffWrapper> dropOffRecords;
+    }
+
+    @InvocableMethod(label='Detect Revenue Drop-Off')
+    public static List<Response> run(List<Request> reqs) {
+        List<Response> results = new List<Response>();
+
+        for (Request r : reqs) {
+            Response res = new Response();
+            res.dropOffRecords = new List<DropOffWrapper>();
+
+            // Query period 1
+            List<AggregateResult> period1Results = [
+                SELECT CustomerName__c customer, SUM(Revenue__c) totalRev
+                FROM Realistic_OrderLine_Datacsv__dlm
+                WHERE OrderPODate__c >= :r.period1Start AND OrderPODate__c <= :r.period1End
+                GROUP BY CustomerName__c
+            ];
+
+            // Query period 2
+            List<AggregateResult> period2Results = [
+                SELECT CustomerName__c customer, SUM(Revenue__c) totalRev
+                FROM Realistic_OrderLine_Datacsv__dlm
+                WHERE OrderPODate__c >= :r.period2Start AND OrderPODate__c <= :r.period2End
+                GROUP BY CustomerName__c
+            ];
+
+            // Map results
+            Map<String, Decimal> period1Map = new Map<String, Decimal>();
+            for (AggregateResult ar : period1Results) {
+                period1Map.put((String)ar.get('customer'), (Decimal)ar.get('totalRev'));
+            }
+
+            Map<String, Decimal> period2Map = new Map<String, Decimal>();
+            for (AggregateResult ar : period2Results) {
+                period2Map.put((String)ar.get('customer'), (Decimal)ar.get('totalRev'));
+            }
+
+            // Compare
+            for (String cust : period1Map.keySet()) {
+                Decimal rev1 = period1Map.get(cust);
+                Decimal rev2 = period2Map.containsKey(cust) ? period2Map.get(cust) : 0;
+
+                if (rev2 < rev1) {
+                    DropOffWrapper row = new DropOffWrapper();
+                    row.customerName = cust;
+                    row.period1Revenue = '$' + rev1.setScale(2).format();
+                    row.period2Revenue = '$' + rev2.setScale(2).format();
+                    row.dropAmount = '$' + (rev1 - rev2).setScale(2).format();
+                    row.dropPercentage = (((rev1 - rev2) / rev1) * 100).setScale(1) + '%';
+                    res.dropOffRecords.add(row);
+                }
+            }
+
+            res.summaryText = res.dropOffRecords.isEmpty()
+                ? 'No revenue drop-offs detected.'
+                : 'Found ' + res.dropOffRecords.size() + ' customers with revenue decline.';
+
+            results.add(res);
+        }
+
+        return results;
+    }
+}
+```
+
+---
+
+## 🟢 LWC (simplified table)
+
+**revenueDropOffTable.html**
+
+```html
+<template>
+    <lightning-card title="Revenue Drop-Off Results">
+        <template if:true={records}>
+            <lightning-datatable
+                key-field="customerName"
+                data={records}
+                columns={columns}>
+            </lightning-datatable>
+        </template>
+        <template if:false={records}>
+            <p class="slds-p-around_medium">No data available</p>
+        </template>
+    </lightning-card>
+</template>
+```
+
+**revenueDropOffTable.js**
+
+```js
+import { LightningElement, api, track } from 'lwc';
+
+export default class RevenueDropOffTable extends LightningElement {
+    @api records; // comes from invocable Response.dropOffRecords
+
+    columns = [
+        { label: 'Customer Name', fieldName: 'customerName' },
+        { label: 'Period 1 Revenue', fieldName: 'period1Revenue' },
+        { label: 'Period 2 Revenue', fieldName: 'period2Revenue' },
+        { label: 'Drop Amount', fieldName: 'dropAmount' },
+        { label: 'Drop Percentage', fieldName: 'dropPercentage' }
+    ];
+}
+```
+
+**revenueDropOffTable.js-meta.xml**
+
+```xml
 <?xml version="1.0" encoding="UTF-8"?>
-<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
-    <apiVersion>64.0</apiVersion>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata" fqn="revenueDropOffTable">
+    <apiVersion>60.0</apiVersion>
     <isExposed>true</isExposed>
-    <masterLabel>Revenue Drop-Off Table</masterLabel>
-
     <targets>
+        <target>lightning__AppPage</target>
+        <target>lightning__RecordPage</target>
+        <target>lightning__HomePage</target>
         <target>lightning__AgentforceOutput</target>
     </targets>
-
-    <targetConfigs>
-        <targetConfig targets="lightning__AgentforceOutput">
-            <sourceType name="lightning__listType" itemTypeName="c__Customer_RevenueDropOffAction.DropOffWrapper"/>
-        </targetConfig>
-    </targetConfigs>
 </LightningComponentBundle>
+```
 
+---
+
+## 🟢 LightningTypeBundle
+
+**schema.json**
+
+```json
+{
+  "title": "Revenue Drop-Off Response",
+  "description": "List of customers with revenue decline",
+  "type": "object",
+  "properties": {
+    "dropOffRecords": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "customerName": { "type": "string" },
+          "period1Revenue": { "type": "string" },
+          "period2Revenue": { "type": "string" },
+          "dropAmount": { "type": "string" },
+          "dropPercentage": { "type": "string" }
+        }
+      }
+    },
+    "summaryText": { "type": "string" }
+  }
+}
+```
+
+**renderer.json**
+
+```json
+{
+  "collection": {
+    "renderer": {
+      "componentOverrides": {
+        "$": {
+          "definition": "c/revenueDropOffTable"
+        }
+      }
+    }
+  }
+}
+```
+
+---
+
+✅ This way:
+
+* Apex classes handle logic.
+* LWC (`revenueDropOffTable`) handles display.
+* LightningTypeBundle (`schema.json`, `renderer.json`) defines data contract + renderer.
+* No `apexClassType` needed in schema.json (that’s why your error appeared).
+
+---
+
+Do you want me to also give you the **package.xml** snippet updated so you can deploy all of this in one go with `sf project deploy`?
+
+<?xml version="1.0" encoding="UTF-8"?>
+<Package xmlns="http://soap.sforce.com/2006/04/metadata">
+    <types>
+        <members>DropOffWrapper</members>
+        <members>Customer_RevenueDropOffAction</members>
+        <name>ApexClass</name>
+    </types>
+
+    <types>
+        <members>revenueDropOffTable</members>
+        <name>LightningComponentBundle</name>
+    </types>
+
+    <types>
+        <members>RevenueDropOffResponse</members>
+        <name>LightningTypeBundle</name>
+    </types>
+
+    <version>60.0</version>
+</Package>
+
+sf project deploy start --manifest manifest/package.xml
