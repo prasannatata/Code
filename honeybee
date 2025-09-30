@@ -1,93 +1,83 @@
-List<DropOffRecord> topDropOffs = dropOffs.subList(0, displayCount);
-res.dropOffRecords.addAll(topDropOffs);
-
-
-
 public with sharing class Customer_RevenueDropOffAction {
-
-    // Input request from Agentforce
+    
     public class Request {
         @InvocableVariable(label='Period 1 Start Date (earlier period)')
         public Date period1Start;
-
+        
         @InvocableVariable(label='Period 1 End Date')
         public Date period1End;
-
+        
         @InvocableVariable(label='Period 2 Start Date (later period)')
         public Date period2Start;
-
+        
         @InvocableVariable(label='Period 2 End Date')
         public Date period2End;
-
+        
         @InvocableVariable(label='Number of Top Customers')
         public Integer topN = 20;
     }
-
-    // Output wrapper returned to Agentforce
+    
     public class Response {
-        @InvocableVariable(label='Result Message')
+        @InvocableVariable(label='Result')
         public String result;
-
+        
         @InvocableVariable(label='Drop Off Records')
         public List<DropOffRecord> dropOffRecords;
     }
-
-    // Inner record for each customer drop-off
+    
     public class DropOffRecord implements Comparable {
         @InvocableVariable(label='Customer Name')
         public String customerName;
-
+        
         @InvocableVariable(label='Period 1 Revenue')
         public Decimal period1Revenue;
-
+        
         @InvocableVariable(label='Period 2 Revenue')
         public Decimal period2Revenue;
-
+        
         @InvocableVariable(label='Drop Amount')
         public Decimal dropAmount;
-
+        
         @InvocableVariable(label='Drop Percent')
         public Decimal dropPercent;
-
-        // Sorting by drop amount (largest drop first)
+        
         public Integer compareTo(Object other) {
-            DropOffRecord otherRec = (DropOffRecord) other;
+            DropOffRecord otherRec = (DropOffRecord)other;
             if (dropAmount > otherRec.dropAmount) return -1;
             if (dropAmount < otherRec.dropAmount) return 1;
             return 0;
         }
     }
-
+    
     @InvocableMethod(label='Detect Revenue Drop-Off')
     public static List<Response> run(List<Request> reqs) {
         List<Response> results = new List<Response>();
-
+        
         for (Request r : reqs) {
             Response res = new Response();
             res.dropOffRecords = new List<DropOffRecord>();
-
-            // Default to current vs previous quarter if dates are not given
+            
+            // Default or provided dates
             Date period1Start, period1End, period2Start, period2End;
             String period1Label, period2Label;
-
+            
             if (r.period1Start == null || r.period2Start == null) {
                 Date today = Date.today();
                 Integer currentYear = today.year();
                 Integer currentQuarter = ((today.month() - 1) / 3) + 1;
-
+                
                 Integer prevQuarter = currentQuarter - 1;
                 Integer prevYear = currentYear;
                 if (prevQuarter == 0) {
                     prevQuarter = 4;
                     prevYear--;
                 }
-
+                
                 period1Start = Date.newInstance(prevYear, ((prevQuarter - 1) * 3) + 1, 1);
                 period1End = period1Start.addMonths(3).addDays(-1);
-
                 period2Start = Date.newInstance(currentYear, ((currentQuarter - 1) * 3) + 1, 1);
                 period2End = period2Start.addMonths(3).addDays(-1);
-
+                
                 period1Label = 'Q' + prevQuarter + ' ' + prevYear;
                 period2Label = 'Q' + currentQuarter + ' ' + currentYear;
             } else {
@@ -95,11 +85,11 @@ public with sharing class Customer_RevenueDropOffAction {
                 period1End = r.period1End;
                 period2Start = r.period2Start;
                 period2End = r.period2End;
-
+                
                 period1Label = period1Start.format() + ' to ' + period1End.format();
                 period2Label = period2Start.format() + ' to ' + period2End.format();
             }
-
+            
             // Query Period 1
             List<AggregateResult> period1Results = [
                 SELECT CustomerName__c, SUM(Revenue__c) totalRev
@@ -107,7 +97,7 @@ public with sharing class Customer_RevenueDropOffAction {
                 WHERE OrderPODate__c >= :period1Start AND OrderPODate__c <= :period1End
                 GROUP BY CustomerName__c
             ];
-
+            
             // Query Period 2
             List<AggregateResult> period2Results = [
                 SELECT CustomerName__c, SUM(Revenue__c) totalRev
@@ -115,94 +105,8 @@ public with sharing class Customer_RevenueDropOffAction {
                 WHERE OrderPODate__c >= :period2Start AND OrderPODate__c <= :period2End
                 GROUP BY CustomerName__c
             ];
-
+            
             // Build maps
             Map<String, Decimal> period1RevMap = new Map<String, Decimal>();
             Map<String, Decimal> period2RevMap = new Map<String, Decimal>();
-
-            for (AggregateResult ar : period1Results) {
-                period1RevMap.put((String) ar.get('CustomerName__c'), (Decimal) ar.get('totalRev'));
-            }
-
-            for (AggregateResult ar : period2Results) {
-                period2RevMap.put((String) ar.get('CustomerName__c'), (Decimal) ar.get('totalRev'));
-            }
-
-            // Detect drop-offs
-            List<DropOffRecord> dropOffs = new List<DropOffRecord>();
-            for (String customer : period1RevMap.keySet()) {
-                Decimal rev1 = period1RevMap.get(customer);
-                Decimal rev2 = period2RevMap.containsKey(customer) ? period2RevMap.get(customer) : 0;
-
-                if (rev2 < rev1) {
-                    DropOffRecord rec = new DropOffRecord();
-                    rec.customerName = customer;
-                    rec.period1Revenue = rev1;
-                    rec.period2Revenue = rev2;
-                    rec.dropAmount = rev1 - rev2;
-                    rec.dropPercent = ((rev1 - rev2) / rev1) * 100;
-                    dropOffs.add(rec);
-                }
-            }
-
-            // Sort by drop amount
-            dropOffs.sort();
-
-            // Trim to Top N
-            Integer displayCount = Math.min(r.topN, dropOffs.size());
-            if (displayCount > 0) {
-                res.dropOffRecords.addAll(dropOffs.subList(0, displayCount));
-                res.result = 'Found ' + displayCount + 
-                             ' customers with revenue decline between ' + 
-                             period1Label + ' and ' + period2Label;
-            } else {
-                res.result = 'No revenue drop-offs detected between ' + 
-                             period1Label + ' and ' + period2Label;
-            }
-
-            results.add(res);
-        }
-
-        return results;
-    }
-}
-
-
-
-// Create a test Request
-List<Customer_RevenueDropOffAction.Request> requests = new List<Customer_RevenueDropOffAction.Request>();
-
-Customer_RevenueDropOffAction.Request req = new Customer_RevenueDropOffAction.Request();
-
-// Example: last quarter vs current quarter
-req.period1Start = Date.today().addMonths(-6);  // 6 months ago
-req.period1End   = Date.today().addMonths(-3);  // 3 months ago
-req.period2Start = Date.today().addMonths(-3);  // 3 months ago
-req.period2End   = Date.today();                // today
-req.topN = 10;
-
-requests.add(req);
-
-// Run the Apex Invocable method
-List<Customer_RevenueDropOffAction.Response> responses = 
-    Customer_RevenueDropOffAction.run(requests);
-
-// Debug results
-for (Customer_RevenueDropOffAction.Response res : responses) {
-    System.debug('Result Message: ' + res.result);
-
-    if (res.dropOffRecords != null && !res.dropOffRecords.isEmpty()) {
-        for (Customer_RevenueDropOffAction.DropOffRecord rec : res.dropOffRecords) {
-            System.debug('--- DropOff ---');
-            System.debug('Customer: ' + rec.customerName);
-            System.debug('Period1 Revenue: ' + rec.period1Revenue);
-            System.debug('Period2 Revenue: ' + rec.period2Revenue);
-            System.debug('Drop Amount: ' + rec.dropAmount);
-            System.debug('Drop %: ' + rec.dropPercent);
-        }
-    } else {
-        System.debug('⚠️ No drop-offs found.');
-    }
-}
-
-
+            
