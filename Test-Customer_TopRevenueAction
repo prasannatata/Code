@@ -97,6 +97,19 @@ insights, and follow-ups. Never echo raw JSON.
 * Drill into Stanford Health by modality?
 * Create follow-up tasks for the top 3 accounts?
 
----
+// Build request
+List<Customer_TopRevenueAction.Request> reqs = new List<Customer_TopRevenueAction.Request>();
 
-Would you like me to **refactor the other Apex classes** (like `RevenueTrend` and `ByDateRange`) into this same **structured DTO pattern**, so your entire demo stays interactive and polished?
+Customer_TopRevenueAction.Request r = new Customer_TopRevenueAction.Request();
+r.limitSize = 5; // test with top 5 customers
+reqs.add(r);
+
+// Run the action
+List<Customer_TopRevenueAction.Response> resList = Customer_TopRevenueAction.run(reqs);
+
+// Debug output
+for (Customer_TopRevenueAction.Response res : resList) {
+    System.debug('Customer: ' + res.customer +
+                 ', Orders: ' + res.orders +
+                 ', Revenue: $' + res.totalRevenue);
+}
