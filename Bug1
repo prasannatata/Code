@@ -14,6 +14,7 @@ public with sharing class Customer_TopRevenueAdvancedAction {
         @InvocableVariable public Integer orderCount;
         @InvocableVariable public Decimal totalRevenue;
         @InvocableVariable public String summary;
+        @InvocableVariable public String markdownTable;  // NEW: Markdown table output
     }
     
     @InvocableMethod(label='Top Revenue Customers')
@@ -71,10 +72,19 @@ public with sharing class Customer_TopRevenueAdvancedAction {
             System.debug('Query Error: ' + e.getMessage());
             Response errorRes = new Response();
             errorRes.summary = '❌ Error executing query: ' + e.getMessage();
+            errorRes.markdownTable = '';
             return new List<Response>{ errorRes };
         }
         
         List<Response> results = new List<Response>();
+        
+        // Build markdown table header
+        String markdownTableOutput = '| Rank | Customer Name | Total Revenue | Order Count |\n';
+        markdownTableOutput += '|------|---------------|---------------|-------------|\n';
+        
+        Integer rank = 1;
+        Decimal grandTotal = 0;
+        Integer totalOrders = 0;
         
         for (AggregateResult ar : rows) {
             Response r = new Response();
@@ -92,23 +102,41 @@ public with sharing class Customer_TopRevenueAdvancedAction {
             r.summary = '📊 ' + r.customerName + ' generated $' + 
                         r.totalRevenue.setScale(2) + ' from ' + r.orderCount + ' orders.';
             
+            // Add to markdown table
+            markdownTableOutput += '| ' + rank + ' | ' + r.customerName + ' | $' + 
+                                   r.totalRevenue.setScale(2) + ' | ' + r.orderCount + ' |\n';
+            
+            // Track totals
+            grandTotal += r.totalRevenue;
+            totalOrders += r.orderCount;
+            
             results.add(r);
+            rank++;
         }
         
         if (results.isEmpty()) {
             Response emptyRes = new Response();
             emptyRes.summary = '⚠️ No customers found for the given filters.';
+            emptyRes.markdownTable = '';
             results.add(emptyRes);
+        } else {
+            // Add totals row
+            markdownTableOutput += '| **TOTAL** | **' + results.size() + ' Customers** | **$' + 
+                                   grandTotal.setScale(2) + '** | **' + totalOrders + '** |\n';
+            
+            // Add markdown table to first response (since it's a summary of all)
+            results[0].markdownTable = markdownTableOutput;
+            
+            // Update first response summary with overview
+            results[0].summary = '📊 **Top ' + results.size() + ' Revenue Customers**\n\n' + 
+                                markdownTableOutput + '\n' +
+                                '💰 Grand Total: $' + grandTotal.setScale(2) + 
+                                ' across ' + totalOrders + ' orders';
         }
         
         return results;
     }
 }
-
-
-
-
-
 
 // ============================================
 // ANONYMOUS APEX TEST SCRIPT
@@ -131,8 +159,106 @@ List<Customer_TopRevenueAdvancedAction.Response> results1 =
 for (Customer_TopRevenueAdvancedAction.Response res : results1) {
     System.debug('Customer: ' + res.customerName);
     System.debug('Order Count: ' + res.orderCount);
-    System.debug('Total Revenue: $' + res.totalRevenue);
+    System.debug('Total Revenue: 
+System.debug('\n');
+
+// TEST 2: Year Filter - 2024
+System.debug('TEST 2: Top 3 Customers for Year 2024');
+System.debug('----------------------------------------');
+Customer_TopRevenueAdvancedAction.Request req2 = new Customer_TopRevenueAdvancedAction.Request();
+req2.limitSize = 3;
+req2.year = 2024;
+
+List<Customer_TopRevenueAdvancedAction.Response> results2 = 
+    Customer_TopRevenueAdvancedAction.run(new List<Customer_TopRevenueAdvancedAction.Request>{ req2 });
+
+for (Customer_TopRevenueAdvancedAction.Response res : results2) {
+    System.debug(res.summary);
+}
+System.debug('\n');
+
+// TEST 3: Year + Quarter Filter - Q2 2024
+System.debug('TEST 3: Top 3 Customers for Q2 2024');
+System.debug('----------------------------------------');
+Customer_TopRevenueAdvancedAction.Request req3 = new Customer_TopRevenueAdvancedAction.Request();
+req3.limitSize = 3;
+req3.year = 2024;
+req3.quarter = 2;
+
+List<Customer_TopRevenueAdvancedAction.Response> results3 = 
+    Customer_TopRevenueAdvancedAction.run(new List<Customer_TopRevenueAdvancedAction.Request>{ req3 });
+
+for (Customer_TopRevenueAdvancedAction.Response res : results3) {
+    System.debug(res.summary);
+}
+System.debug('\n');
+
+// TEST 4: With Vendor Filter
+System.debug('TEST 4: Top 3 Customers for Specific Vendor');
+System.debug('----------------------------------------');
+// IMPORTANT: Replace 'YourVendorName' with an actual vendor from your data
+Customer_TopRevenueAdvancedAction.Request req4 = new Customer_TopRevenueAdvancedAction.Request();
+req4.limitSize = 3;
+req4.vendor = 'YourVendorName'; // UPDATE THIS
+
+List<Customer_TopRevenueAdvancedAction.Response> results4 = 
+    Customer_TopRevenueAdvancedAction.run(new List<Customer_TopRevenueAdvancedAction.Request>{ req4 });
+
+for (Customer_TopRevenueAdvancedAction.Response res : results4) {
+    System.debug(res.summary);
+}
+System.debug('\n');
+
+// TEST 5: Multiple Filters - Year + Modality + Status
+System.debug('TEST 5: Top 3 Customers for 2024 + Filters');
+System.debug('----------------------------------------');
+// IMPORTANT: Replace with actual values from your data
+Customer_TopRevenueAdvancedAction.Request req5 = new Customer_TopRevenueAdvancedAction.Request();
+req5.limitSize = 3;
+req5.year = 2024;
+req5.modality = 'YourModalityValue'; // UPDATE THIS
+req5.orderStatus = 'Completed'; // UPDATE THIS
+
+List<Customer_TopRevenueAdvancedAction.Response> results5 = 
+    Customer_TopRevenueAdvancedAction.run(new List<Customer_TopRevenueAdvancedAction.Request>{ req5 });
+
+for (Customer_TopRevenueAdvancedAction.Response res : results5) {
+    System.debug(res.summary);
+}
+System.debug('\n');
+
+// TEST 6: Edge Case - No Results Expected
+System.debug('TEST 6: Query with No Expected Results');
+System.debug('----------------------------------------');
+Customer_TopRevenueAdvancedAction.Request req6 = new Customer_TopRevenueAdvancedAction.Request();
+req6.limitSize = 5;
+req6.year = 1999; // Unlikely to have data
+
+List<Customer_TopRevenueAdvancedAction.Response> results6 = 
+    Customer_TopRevenueAdvancedAction.run(new List<Customer_TopRevenueAdvancedAction.Request>{ req6 });
+
+for (Customer_TopRevenueAdvancedAction.Response res : results6) {
+    System.debug(res.summary);
+}
+System.debug('\n');
+
+// TEST 7: Null Request (Should use defaults)
+System.debug('TEST 7: Null Request (Default Behavior)');
+System.debug('----------------------------------------');
+List<Customer_TopRevenueAdvancedAction.Response> results7 = 
+    Customer_TopRevenueAdvancedAction.run(null);
+
+for (Customer_TopRevenueAdvancedAction.Response res : results7) {
+    System.debug(res.summary);
+}
+
+System.debug('\n========================================');
+System.debug('ALL TESTS COMPLETED');
+System.debug('========================================'); + res.totalRevenue);
     System.debug('Summary: ' + res.summary);
+    if (String.isNotBlank(res.markdownTable)) {
+        System.debug('\nMARKDOWN TABLE:\n' + res.markdownTable);
+    }
     System.debug('---');
 }
 System.debug('\n');
@@ -226,165 +352,6 @@ List<Customer_TopRevenueAdvancedAction.Response> results7 =
 for (Customer_TopRevenueAdvancedAction.Response res : results7) {
     System.debug(res.summary);
 }
-
-
-
-
-
-Here's the complete configuration for your Agent Action:
-
-## 🎯 Agent Action Configuration
-
-### **Agent Action Label**
-```
-Top Revenue Customers
-```
-
-### **Agent Action Instructions**
-```
-This action retrieves the top revenue-generating customers based on order data. It analyzes customer purchase history and ranks them by total revenue. Use this when the user asks about top customers, best customers, highest revenue customers, or customer revenue rankings. The action supports filtering by year, quarter, vendor, modality, and order status to provide targeted insights.
-```
-
-### **Show loading text for this action**
-☑️ Checked
-
-### **Loading Text**
-```
-Analyzing customer revenue data...
-```
-
----
-
-## 📥 **INPUTS**
-
-### **1. limitSize**
-**Instructions:**
-```
-The maximum number of top customers to return (default: 5). Ask the user how many customers they want to see, such as "top 3", "top 10", etc.
-```
-**Data Type:** `Integer`  
-**Require input:** ☐ Unchecked  
-**Collect data from user:** ☑ Checked
-
----
-
-### **2. modality**
-**Instructions:**
-```
-Filter results by modality type (e.g., CT, MRI, X-Ray, Ultrasound). Only include this filter if the user specifically mentions a modality. Leave blank if not specified.
-```
-**Data Type:** `Text`  
-**Require input:** ☐ Unchecked  
-**Collect data from user:** ☑ Checked
-
----
-
-### **3. orderStatus**
-**Instructions:**
-```
-Filter results by order status (e.g., Completed, Pending, Cancelled). Only apply this filter if the user mentions a specific order status. Leave blank if not specified.
-```
-**Data Type:** `Text`  
-**Require input:** ☐ Unchecked  
-**Collect data from user:** ☑ Checked
-
----
-
-### **4. quarter**
-**Instructions:**
-```
-Filter by fiscal quarter (1, 2, 3, or 4). Use this when the user mentions "Q1", "Q2", "first quarter", etc. Must be used with the year parameter. Leave blank if not specified.
-```
-**Data Type:** `Integer`  
-**Require input:** ☐ Unchecked  
-**Collect data from user:** ☑ Checked
-
----
-
-### **5. vendor**
-**Instructions:**
-```
-Filter results by vendor name. Only include this filter if the user specifically mentions a vendor. Leave blank if not specified.
-```
-**Data Type:** `Text`  
-**Require input:** ☐ Unchecked  
-**Collect data from user:** ☑ Checked
-
----
-
-### **6. year**
-**Instructions:**
-```
-Filter by calendar year (e.g., 2024, 2025). Use this when the user mentions a specific year or time period like "this year", "last year", "2024", etc. Leave blank to include all years.
-```
-**Data Type:** `Integer`  
-**Require input:** ☐ Unchecked  
-**Collect data from user:** ☑ Checked
-
----
-
-## 📤 **OUTPUTS**
-
-### **1. customerName**
-**Instructions:**
-```
-The name of the customer. Display this prominently in the conversation as it's the primary identifier for each result.
-```
-**Data Type:** `Text`  
-**Filter from agent action:** ☑ Checked  
-**Show in conversation:** ☑ Checked  
-**Output Rendering:** `Text`
-
----
-
-### **2. orderCount**
-**Instructions:**
-```
-The total number of orders placed by this customer. Present this as context to show purchase frequency alongside revenue.
-```
-**Data Type:** `Integer`  
-**Filter from agent action:** ☑ Checked  
-**Show in conversation:** ☑ Checked  
-**Output Rendering:** `Integer`
-
----
-
-### **3. summary**
-**Instructions:**
-```
-A formatted summary message combining customer name, revenue, and order count. This is the primary output to show users. Display this prominently as it provides the complete insight in one readable sentence.
-```
-**Data Type:** `Text`  
-**Filter from agent action:** ☑ Checked  
-**Show in conversation:** ☑ Checked  
-**Output Rendering:** `Text`
-
----
-
-### **4. totalRevenue**
-**Instructions:**
-```
-The total revenue generated by this customer. Display with currency formatting (e.g., $50,000.00) to emphasize the monetary value.
-```
-**Data Type:** `Decimal`  
-**Filter from agent action:** ☑ Checked  
-**Show in conversation:** ☑ Checked  
-**Output Rendering:** `Decimal`
-
----
-
-## 💡 **Quick Tips**
-
-- **All inputs are optional** - The agent will ask for them only if relevant to the user's question
-- **The summary field** contains the most user-friendly output - prioritize showing this
-- **Year + Quarter** work together - quarter requires year to be meaningful
-- **Default limit is 5** - users can request more by saying "top 10" or "show me 20"
-
-This configuration allows natural language queries like:
-- "Show me the top 5 customers"
-- "Who are our best customers in Q2 2024?"
-- "Top 10 customers by revenue for vendor XYZ"
-- "Best customers with completed orders this year"
 
 System.debug('\n========================================');
 System.debug('ALL TESTS COMPLETED');
