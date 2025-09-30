@@ -1,0 +1,52 @@
+public with sharing class Customer_TopRevenueAction {
+
+    // Input wrapper (to allow passing parameters like limit size)
+    public class Request {
+        @InvocableVariable(label='Number of Customers' required=false)
+        public Integer limitSize;
+    }
+
+    // Output wrapper (fields that will be returned to Flow / Prompt Builder)
+    public class Response {
+        @InvocableVariable(label='Customer Name')
+        public String customerName;
+
+        @InvocableVariable(label='Order Count')
+        public Integer orderCount;
+
+        @InvocableVariable(label='Total Revenue')
+        public Decimal totalRevenue;
+    }
+
+    // Invocable Method
+    @InvocableMethod(label='Top Revenue Customers' description='List top customers ranked by total revenue')
+    public static List<Response> run(List<Request> reqs) {
+        Integer limitValue = 5; // default
+        if (reqs != null && !reqs.isEmpty() && reqs[0].limitSize != null && reqs[0].limitSize > 0) {
+            limitValue = reqs[0].limitSize;
+        }
+
+        List<Response> results = new List<Response>();
+
+        // ⚠️ Replace Realistic_OrderLine_Datacsv__dlm, CustomerName__c, Revenue__c with your real object/field names
+        List<AggregateResult> rows = [
+            SELECT CustomerName__c custName,
+                   COUNT(Id) orderCount,
+                   SUM(Revenue__c) totalRevenue
+            FROM Realistic_OrderLine_Datacsv__dlm
+            GROUP BY CustomerName__c
+            ORDER BY SUM(Revenue__c) DESC
+            LIMIT :limitValue
+        ];
+
+        for (AggregateResult ar : rows) {
+            Response r = new Response();
+            r.customerName = (String) ar.get('custName');
+            r.orderCount   = (Integer) ar.get('orderCount');
+            r.totalRevenue = (Decimal) ar.get('totalRevenue');
+            results.add(r);
+        }
+
+        return results;
+    }
+}
