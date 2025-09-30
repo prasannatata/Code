@@ -1,0 +1,168 @@
+I can see from the error in your VS Code that there's a compilation issue with your LWC. Based on the reference article and the error you're encountering, the issue is likely with your LWC configuration or the way you're trying to integrate it with Agentforce.
+
+Looking at the reference article, you need to follow a specific pattern for Agentforce integration that's different from what we attempted earlier. Here's the corrected approach:
+
+## Issue Analysis
+
+The reference article shows you need:
+1. **Custom Lightning Types** (metadata files)
+2. **Specific LWC target configuration**
+3. **Proper Apex class structure**
+
+## Corrected Solution
+
+### Step 1: Update Your LWC Meta.xml File
+
+Replace your `revenueDropOffTable.js-meta.xml` with:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>62.0</apiVersion>
+    <isExposed>true</isExposed>
+    <masterLabel>Revenue Drop Off Table</masterLabel>
+    <targets>
+        <target>lightning__AgentforceOutput</target>
+    </targets>
+    <targetConfigs>
+        <targetConfig targets="lightning__AgentforceOutput">
+            <sourceType name="lightning__listType" itemTypeName="c__revenueDropOffResponse"/>
+        </targetConfig>
+    </targetConfigs>
+</LightningComponentBundle>
+```
+
+### Step 2: Update Your LWC JavaScript
+
+Replace your `revenueDropOffTable.js` with:
+
+```javascript
+import { LightningElement, api } from 'lwc';
+
+export default class RevenueDropOffTable extends LightningElement {
+    @api value; // This will receive data from Agentforce
+
+    columns = [
+        { label: 'Customer', fieldName: 'customerName', type: 'text' },
+        { label: 'Period 1', fieldName: 'period1Revenue', type: 'text' },
+        { label: 'Period 2', fieldName: 'period2Revenue', type: 'text' },
+        { label: 'Drop Amount', fieldName: 'dropAmount', type: 'text' },
+        { label: 'Drop %', fieldName: 'dropPercentage', type: 'text' }
+    ];
+
+    get tableData() {
+        if (!this.value || !Array.isArray(this.value)) {
+            return [];
+        }
+
+        return this.value.map(item => ({
+            customerName: item.customerName,
+            period1Revenue: item.period1Revenue,
+            period2Revenue: item.period2Revenue,
+            dropAmount: item.dropAmount,
+            dropPercentage: item.dropPercentage
+        }));
+    }
+}
+```
+
+### Step 3: Create Custom Lightning Types
+
+You need to create these metadata files in your project:
+
+**Create folder:** `force-app/main/default/customMetadata/`
+
+**File 1:** `revenueDropOffResponse.lightningType/schema.json`
+```json
+{
+  "title": "Revenue Drop Off Response",
+  "description": "Revenue Drop Off Analysis Response",
+  "lightning:type": "@apexClassType/c__Customer_RevenueDropOffAction$DropOffData"
+}
+```
+
+**File 2:** `revenueDropOffResponse.lightningType/renderer.json`
+```json
+{
+    "collection": {
+        "renderer": {
+            "componentOverrides": {
+                "$": {
+                    "definition": "c/revenueDropOffTable"
+                }
+            }
+        }
+    }
+}
+```
+
+### Step 4: Update Your Apex Class
+
+Add a new wrapper class to your Apex and modify the response:
+
+```apex
+public with sharing class Customer_RevenueDropOffAction {
+    // ... existing Request class ...
+
+    public class Response {
+        @InvocableVariable(label='Drop Off Data')
+        public List<DropOffData> dropOffData;
+        
+        @InvocableVariable(label='Summary Text')
+        public String summaryText;
+    }
+
+    public class DropOffData {
+        @InvocableVariable
+        public String customerName;
+        
+        @InvocableVariable
+        public String period1Revenue;
+        
+        @InvocableVariable
+        public String period2Revenue;
+        
+        @InvocableVariable
+        public String dropAmount;
+        
+        @InvocableVariable
+        public String dropPercentage;
+
+        public DropOffData(String customerName, String period1Revenue, String period2Revenue, String dropAmount, String dropPercentage) {
+            this.customerName = customerName;
+            this.period1Revenue = period1Revenue;
+            this.period2Revenue = period2Revenue;
+            this.dropAmount = dropAmount;
+            this.dropPercentage = dropPercentage;
+        }
+    }
+
+    // Update your method to populate dropOffData instead of separate lists
+    @InvocableMethod(label='Detect Revenue Drop-Off')
+    public static List<Response> run(List<Request> reqs) {
+        // ... existing logic ...
+        
+        res.dropOffData = new List<DropOffData>();
+        for (Integer i = 0; i < displayCount; i++) {
+            DropOffRecord rec = dropOffs[i];
+            res.dropOffData.add(new DropOffData(
+                rec.customerName,
+                '$' + rec.period1Revenue.setScale(2).format(),
+                '$' + rec.period2Revenue.setScale(2).format(),
+                '$' + rec.dropAmount.setScale(2).format(),
+                rec.dropPercent.setScale(1) + '%'
+            ));
+        }
+        
+        // ... rest of logic ...
+    }
+}
+```
+
+### Step 5: Deploy and Configure
+
+1. Deploy all files
+2. In Agent Builder, select **Custom Salesforce Lightning Type**
+3. Choose **Revenue Drop Off Response**
+
+This should resolve the compilation errors and properly integrate with Agentforce following the documented pattern.
