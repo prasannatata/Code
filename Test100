@@ -279,3 +279,13 @@ Do you want me to also give you the **package.xml** snippet updated so you can d
 </Package>
 
 sf project deploy start --manifest manifest/package.xml
+
+
+{
+  "type": "apexClassType",
+  "apiName": "DropOffWrapper",
+  "title": "Revenue Drop-Off Response",
+  "description": "List of customers with revenue decline"
+}
+sf project deploy start --source-dir force-app/main/default/lightningTypes/RevenueDropOffResponse
+
