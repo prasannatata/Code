@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>61.0</apiVersion>
+    <isExposed>true</isExposed>
+    <masterLabel>Revenue Drop Off Table</masterLabel>
+    <targets>
+        <target>lightning__AgentforceOutput</target>
+    </targets>
+</LightningComponentBundle>
+
+public with sharing class Customer_RevenueDropOffAction {
+    
+    @InvocableMethod(
+        label='Find Revenue Drop-Off Customers'
+        description='Identifies customers with significant revenue decline between two periods'
+    )
+    public static List<CustomerRevenueDrop> findRevenueDropOffCustomers(List<RevenueDropOffRequest> requests) {
+        List<CustomerRevenueDrop> allResults = new List<CustomerRevenueDrop>();
+        
+        for (RevenueDropOffRequest request : requests) {
+            List<CustomerRevenueDrop> dropOffCustomers = analyzeRevenueDropOff(request);
+            allResults.addAll(dropOffCustomers);
+        }
+        
+        return allResults;
+    }
+    
+    private static List<CustomerRevenueDrop> analyzeRevenueDropOff(RevenueDropOffRequest request) {
+        List<CustomerRevenueDrop> dropOffCustomers = new List<CustomerRevenueDrop>();
+        
+        // Set default dates if not provided
+        Date period1Start = request.period1Start;
+        Date period1End = request.period1End;
+        Date period2Start = request.period2Start;
+        Date period2End = request.period2End;
+        
+        if (period1Start == null || period1End == null || period2Start == null || period2End == null) {
+            setDefaultPeriods(request);
+            period1Start = request.period1Start;
+            period1End = request.period1End;
+            period2Start = request.period2Start;
+            period2End = request.period2End;
+        }
+        
+        // Query Period 1 Revenue
+        Map<Id, Decimal> period1Revenue = new Map<Id, Decimal>();
+        for (AggregateResult ar : [
+            SELECT Customer__c, SUM(Revenue__c) totalRevenue
+            FROM Order__c 
+            WHERE OrderPODate__c >= :period1Start 
+            AND OrderPODate__c <= :period1End
+            AND Customer__c != null
+            GROUP BY Customer__c
+        ]) {
+            period1Revenue.put((Id)ar.get('Customer__c'), (Decimal)ar.get('totalRevenue'));
+        }
+        
+        // Query Period 2 Revenue
+        Map<Id, Decimal> period2Revenue = new Map<Id, Decimal>();
+        for (AggregateResult ar : [
+            SELECT Customer__c, SUM(Revenue__c) totalRevenue
+            FROM Order__c 
+            WHERE OrderPODate__c >= :period2Start 
+            AND OrderPODate__c <= :period2End
+            AND Customer__c != null
+            GROUP BY Customer__c
+        ]) {
+            period2Revenue.put((Id)ar.get('Customer__c'), (Decimal)ar.get('totalRevenue'));
+        }
+        
+        // Get customer details
+        Set<Id> allCustomerIds = new Set<Id>();
+        allCustomerIds.addAll(period1Revenue.keySet());
+        allCustomerIds.addAll(period2Revenue.keySet());
+        
+        Map<Id, Account> customerMap = new Map<Id, Account>([
+            SELECT Id, Name, ParentId, Parent.Name 
+            FROM Account 
+            WHERE Id IN :allCustomerIds
+        ]);
+        
+        // Calculate drop-offs
+        for (Id customerId : period1Revenue.keySet()) {
+            Decimal p1Revenue = period1Revenue.get(customerId) ?? 0;
+            Decimal p2Revenue = period2Revenue.get(customerId) ?? 0;
+            
+            // Only include customers with revenue decline
+            if (p1Revenue > 0 && p2Revenue < p1Revenue) {
+                Decimal dropAmount = p1Revenue - p2Revenue;
+                Decimal dropPercentage = (dropAmount / p1Revenue) * 100;
+                
+                // Filter for significant drops (configurable threshold)
+                Decimal threshold = request.minimumDropPercentage ?? 10.0;
+                if (dropPercentage >= threshold) {
+                    Account customer = customerMap.get(customerId);
+                    
+                    CustomerRevenueDrop dropCustomer = new CustomerRevenueDrop();
+                    dropCustomer.customerName = customer?.Name ?? 'Unknown Customer';
+                    dropCustomer.parentCustomer = customer?.Parent?.Name ?? '';
+                    dropCustomer.period1Revenue = p1Revenue;
+                    dropCustomer.period2Revenue = p2Revenue;
+                    dropCustomer.dropAmount = dropAmount;
+                    dropCustomer.dropPercentage = dropPercentage.setScale(1) + '%';
+                    dropCustomer.customerId = customerId;
+                    
+                    dropOffCustomers.add(dropCustomer);
+                }
+            }
+        }
+        
+        // Sort by drop amount (highest first)
+        dropOffCustomers.sort(new RevenueDropComparator());
+        
+        // Apply limit
+        Integer limitSize = request.limitSize ?? 10;
+        if (dropOffCustomers.size() > limitSize) {
+            List<CustomerRevenueDrop> limitedResults = new List<CustomerRevenueDrop>();
+            for (Integer i = 0; i < limitSize; i++) {
+                limitedResults.add(dropOffCustomers[i]);
+            }
+            return limitedResults;
+        }
+        
+        return dropOffCustomers;
+    }
+    
+    private static void setDefaultPeriods(RevenueDropOffRequest request) {
+        Date today = Date.today();
+        
+        // Default: Current quarter vs previous quarter
+        Date currentQuarterStart = today.toStartOfMonth().addMonths(-(Math.mod(today.month() - 1, 3)));
+        Date previousQuarterStart = currentQuarterStart.addMonths(-3);
+        Date previousQuarterEnd = currentQuarterStart.addDays(-1);
+        Date currentQuarterEnd = today;
+        
+        request.period1Start = previousQuarterStart;
+        request.period1End = previousQuarterEnd;
+        request.period2Start = currentQuarterStart;
+        request.period2End = currentQuarterEnd;
+    }
+    
+    // Request wrapper class
+    public class RevenueDropOffRequest {
+        @InvocableVariable(label='Period 1 Start Date' description='Start date for baseline period')
+        public Date period1Start;
+        
+        @InvocableVariable(label='Period 1 End Date' description='End date for baseline period')
+        public Date period1End;
+        
+        @InvocableVariable(label='Period 2 Start Date' description='Start date for comparison period')
+        public Date period2Start;
+        
+        @InvocableVariable(label='Period 2 End Date' description='End date for comparison period')
+        public Date period2End;
+        
+        @InvocableVariable(label='Minimum Drop Percentage' description='Minimum percentage drop to include (default: 10%)')
+        public Decimal minimumDropPercentage;
+        
+        @InvocableVariable(label='Limit Results' description='Maximum number of results to return (default: 10)')
+        public Integer limitSize;
+    }
+    
+    // Response wrapper class
+    public class RevenueDropOffResponse {
+        @InvocableVariable(label='Drop-Off Customers' description='List of customers with revenue decline')
+        public List<CustomerRevenueDrop> dropOffCustomers;
+    }
+    
+    // Customer data wrapper class
+    public class CustomerRevenueDrop {
+        @InvocableVariable
+        public String customerName;
+        
+        @InvocableVariable
+        public String parentCustomer;
+        
+        @InvocableVariable
+        public Decimal period1Revenue;
+        
+        @InvocableVariable
+        public Decimal period2Revenue;
+        
+        @InvocableVariable
+        public Decimal dropAmount;
+        
+        @InvocableVariable
+        public String dropPercentage;
+        
+        @InvocableVariable
+        public Id customerId;
+    }
+    
+    // Comparator for sorting by drop amount
+    public class RevenueDropComparator implements Comparator<CustomerRevenueDrop> {
+        public Integer compare(CustomerRevenueDrop a, CustomerRevenueDrop b) {
+            if (a.dropAmount > b.dropAmount) return -1;
+            if (a.dropAmount < b.dropAmount) return 1;
+            return 0;
+        }
+    }
+}
+
+rm -rf force-app/main/default/lightningTypes
+sf project deploy start --source-dir force-app/main/default/classes
+sf project deploy start --source-dir force-app/main/default/lwc
