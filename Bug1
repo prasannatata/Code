@@ -1,0 +1,148 @@
+public with sharing class Customer_TopRevenueAdvancedAction {
+
+    // Input wrapper
+    public class Request {
+        @InvocableVariable(label='Number of Customers' required=false)
+        public Integer limitSize;
+
+        @InvocableVariable(label='Year' required=false)
+        public Integer year;
+
+        @InvocableVariable(label='Quarter' required=false)
+        public Integer quarter;
+
+        @InvocableVariable(label='Vendor' required=false)
+        public String vendor;
+
+        @InvocableVariable(label='Modality' required=false)
+        public String modality;
+
+        @InvocableVariable(label='Order Status' required=false)
+        public String orderStatus;
+    }
+
+    // Output wrapper
+    public class Response {
+        @InvocableVariable(label='Customer Name')
+        public String customerName;
+
+        @InvocableVariable(label='Order Count')
+        public Integer orderCount;
+
+        @InvocableVariable(label='Total Revenue')
+        public Decimal totalRevenue;
+
+        @InvocableVariable(label='Year')
+        public Integer year;
+
+        @InvocableVariable(label='Quarter')
+        public Integer quarter;
+
+        @InvocableVariable(label='Summary')
+        public String summary;
+    }
+
+    @InvocableMethod(label='Top Revenue Customers Advanced'
+                     description='List top customers by revenue with optional filters (Year, Quarter, Vendor, Modality, Order Status)')
+    public static List<Response> run(List<Request> reqs) {
+        List<Response> results = new List<Response>();
+        if (reqs == null || reqs.isEmpty()) return results;
+
+        Request req = reqs[0];
+
+        Integer limitValue = (req.limitSize != null && req.limitSize > 0) ? req.limitSize : 5;
+
+        // Base SOQL
+        String baseQuery = 'SELECT CustomerName__c custName, COUNT(Id) orderCount, SUM(Revenue__c) totalRevenue, ' +
+                           'CALENDAR_YEAR(OrderDate__c) yr, CALENDAR_QUARTER(OrderDate__c) qtr ' +
+                           'FROM Realistic_OrderLine_Datacsv__dlm ';
+
+        // Apply filters dynamically
+        List<String> filters = new List<String>();
+        if (req.year != null) {
+            filters.add('CALENDAR_YEAR(OrderDate__c) = :req.year');
+        }
+        if (req.quarter != null) {
+            filters.add('CALENDAR_QUARTER(OrderDate__c) = :req.quarter');
+        }
+        if (String.isNotBlank(req.vendor)) {
+            filters.add('Vendor__c = :req.vendor');
+        }
+        if (String.isNotBlank(req.modality)) {
+            filters.add('Modality__c = :req.modality');
+        }
+        if (String.isNotBlank(req.orderStatus)) {
+            filters.add('OrderStatus__c = :req.orderStatus');
+        }
+
+        if (!filters.isEmpty()) {
+            baseQuery += 'WHERE ' + String.join(filters, ' AND ') + ' ';
+        }
+
+        baseQuery += 'GROUP BY CustomerName__c, CALENDAR_YEAR(OrderDate__c), CALENDAR_QUARTER(OrderDate__c) ' +
+                     'ORDER BY SUM(Revenue__c) DESC ' +
+                     'LIMIT :limitValue';
+
+        // Run query
+        List<AggregateResult> rows = Database.query(baseQuery);
+
+        // Build results + conversational summary
+        Integer rank = 1;
+        for (AggregateResult ar : rows) {
+            Response r = new Response();
+            r.customerName = (String) ar.get('custName');
+            r.orderCount   = (Integer) ar.get('orderCount');
+            r.totalRevenue = (Decimal) ar.get('totalRevenue');
+            r.year         = (Integer) ar.get('yr');
+            r.quarter      = (Integer) ar.get('qtr');
+
+            // Conversational summary (for demo)
+            if (rank == 1) {
+                r.summary = '📊 ' + r.customerName + ' leads the list with $' + r.totalRevenue.setScale(2) +
+                            ' across ' + r.orderCount + ' orders.';
+            } else {
+                r.summary = rank + '. ' + r.customerName + ' has $' + r.totalRevenue.setScale(2) +
+                            ' revenue from ' + r.orderCount + ' orders.';
+            }
+
+            results.add(r);
+            rank++;
+        }
+
+        // If no data found
+        if (results.isEmpty()) {
+            Response r = new Response();
+            r.summary = '⚠️ No revenue data found for the given filters. Try adjusting year, quarter, or vendor.';
+            results.add(r);
+        }
+
+        return results;
+    }
+}
+
+
+// Build input
+Customer_TopRevenueAdvancedAction.Request req = new Customer_TopRevenueAdvancedAction.Request();
+req.limitSize = 5;        // Top 5 customers
+req.year = 2025;          // Filter by year
+req.quarter = 2;          // Filter by Q2
+req.vendor = null;        // Optional - try "Siemens" etc.
+req.modality = null;      // Optional - try "CT" etc.
+req.orderStatus = null;   // Optional - e.g. "Completed"
+
+// Run action
+List<Customer_TopRevenueAdvancedAction.Request> inputs = new List<Customer_TopRevenueAdvancedAction.Request>{ req };
+List<Customer_TopRevenueAdvancedAction.Response> outputs = Customer_TopRevenueAdvancedAction.run(inputs);
+
+// Log results
+System.debug('=== Top Revenue Customers (Test) ===');
+for (Customer_TopRevenueAdvancedAction.Response r : outputs) {
+    System.debug(
+        'Customer: ' + r.customerName +
+        ' | Orders: ' + r.orderCount +
+        ' | Revenue: $' + r.totalRevenue +
+        ' | Year: ' + r.year +
+        ' | Q' + r.quarter +
+        ' | Summary: ' + r.summary
+    );
+}
