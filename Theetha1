@@ -1,0 +1,124 @@
+Got it ✅ — thanks for pasting your full **Product Search** example.
+Now let’s adapt it for your **Revenue Drop-Off use case** (so it works with `Customer_RevenueDropOffAction` and `DropOffWrapper` objects).
+
+I’ll give you **all 4 files**: HTML, JS, XML, schema.json, renderer.json.
+
+---
+
+## 📄 revenueDropOffTable.html
+
+```html
+<template>
+    <lightning-card title="Revenue Drop-Off Analysis" icon-name="standard:account">
+        <lightning-datatable
+            data={records}
+            columns={columns}
+            hide-checkbox-column
+            key-field="customerName">
+        </lightning-datatable>
+    </lightning-card>
+</template>
+```
+
+---
+
+## 📄 revenueDropOffTable.js
+
+```js
+import { LightningElement, api } from 'lwc';
+
+export default class RevenueDropOffTable extends LightningElement {
+
+    @api value; // This will receive List<DropOffWrapper> from Agentforce
+
+    columns = [
+        { label: 'Customer Name', fieldName: 'customerName' },
+        { label: 'Period 1 Revenue', fieldName: 'period1Revenue' },
+        { label: 'Period 2 Revenue', fieldName: 'period2Revenue' },
+        { label: 'Drop Amount', fieldName: 'dropAmount' },
+        { label: 'Drop %', fieldName: 'dropPercentage' }
+    ];
+
+    get records() {
+        let rows = [];
+
+        if (this.value && Array.isArray(this.value)) {
+            for (const element of this.value) {
+                rows.push({
+                    customerName: element.customerName,
+                    period1Revenue: element.period1Revenue,
+                    period2Revenue: element.period2Revenue,
+                    dropAmount: element.dropAmount,
+                    dropPercentage: element.dropPercentage
+                });
+            }
+        }
+
+        return rows;
+    }
+}
+```
+
+---
+
+## 📄 revenueDropOffTable.js-meta.xml
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>64.0</apiVersion>
+    <isExposed>true</isExposed>
+    <masterLabel>Revenue Drop-Off Table</masterLabel>
+    <targets>
+        <target>lightning__AgentforceOutput</target>
+    </targets>
+    <targetConfigs>
+        <targetConfig targets="lightning__AgentforceOutput">
+            <sourceType name="lightning__listType" itemTypeName="c__RevenueDropOffWrapper"/>
+        </targetConfig>
+    </targetConfigs>
+</LightningComponentBundle>
+```
+
+---
+
+## 📄 schema.json
+
+```json
+{
+  "title": "Revenue Drop-Off Response",
+  "description": "Wrapper for revenue drop-off details",
+  "lightning:type": "@apexClassType/c__Customer_RevenueDropOffAction$DropOffWrapper"
+}
+```
+
+---
+
+## 📄 renderer.json
+
+```json
+{
+  "collection": {
+    "renderer": {
+      "componentOverrides": {
+        "$": {
+          "definition": "c/revenueDropOffTable"
+        }
+      }
+    }
+  }
+}
+```
+
+---
+
+### 🔑 Key Points (differences from Product Search)
+
+* Instead of `ProductWrapper`, we use **DropOffWrapper**.
+* `itemTypeName="c__RevenueDropOffWrapper"` must match your Apex inner class name.
+* `schema.json` maps to `Customer_RevenueDropOffAction$DropOffWrapper`.
+* LWC iterates over `value` (which will be a list of DropOffWrapper rows).
+
+---
+
+👉 Do you want me to also include a **sample Flow JSON snippet** that shows how the `Response.dropOffRecords` (List<DropOffWrapper>) connects to this LWC? That would confirm the binding end-to-end.
