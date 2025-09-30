@@ -1,0 +1,106 @@
+public with sharing class Customer_RevenueDropOffAction {
+
+    // === INPUT REQUEST ===
+    public class Request {
+        @InvocableVariable(label='Period 1 Start Date (earlier period)')
+        public Date period1Start;
+
+        @InvocableVariable(label='Period 1 End Date')
+        public Date period1End;
+
+        @InvocableVariable(label='Period 2 Start Date (later period)')
+        public Date period2Start;
+
+        @InvocableVariable(label='Period 2 End Date')
+        public Date period2End;
+
+        @InvocableVariable(label='Number of Top Customers')
+        public Integer topN = 20;
+    }
+
+    // === WRAPPER FOR ROWS ===
+    public class DropOffWrapper {
+        @InvocableVariable public String customerName;
+        @InvocableVariable public String period1Revenue;
+        @InvocableVariable public String period2Revenue;
+        @InvocableVariable public String dropAmount;
+        @InvocableVariable public String dropPercentage;
+    }
+
+    // === RESPONSE ===
+    public class Response {
+        @InvocableVariable(label='Summary Text')
+        public String summaryText;
+
+        @InvocableVariable(label='Drop Off Records')
+        public List<DropOffWrapper> dropOffRecords;
+    }
+
+    // === INVOCABLE METHOD ===
+    @InvocableMethod(label='Detect Revenue Drop-Off')
+    public static List<Response> run(List<Request> reqs) {
+        List<Response> results = new List<Response>();
+
+        for (Request r : reqs) {
+            Response res = new Response();
+            res.dropOffRecords = new List<DropOffWrapper>();
+
+            // Calculate date ranges (simplified demo logic)
+            Date period1Start = r.period1Start != null ? r.period1Start : Date.today().addMonths(-6);
+            Date period1End   = r.period1End   != null ? r.period1End   : Date.today().addMonths(-3);
+            Date period2Start = r.period2Start != null ? r.period2Start : Date.today().addMonths(-3);
+            Date period2End   = r.period2End   != null ? r.period2End   : Date.today();
+
+            // Dummy SOQL — replace with your object
+            List<AggregateResult> period1Results = [
+                SELECT CustomerName__c customer, SUM(Revenue__c) totalRev
+                FROM Realistic_OrderLine_Datacsv__dlm
+                WHERE OrderPODate__c >= :period1Start AND OrderPODate__c <= :period1End
+                GROUP BY CustomerName__c
+            ];
+
+            List<AggregateResult> period2Results = [
+                SELECT CustomerName__c customer, SUM(Revenue__c) totalRev
+                FROM Realistic_OrderLine_Datacsv__dlm
+                WHERE OrderPODate__c >= :period2Start AND OrderPODate__c <= :period2End
+                GROUP BY CustomerName__c
+            ];
+
+            // Build maps
+            Map<String, Decimal> period1Map = new Map<String, Decimal>();
+            Map<String, Decimal> period2Map = new Map<String, Decimal>();
+
+            for (AggregateResult ar : period1Results) {
+                period1Map.put((String)ar.get('customer'), (Decimal)ar.get('totalRev'));
+            }
+            for (AggregateResult ar : period2Results) {
+                period2Map.put((String)ar.get('customer'), (Decimal)ar.get('totalRev'));
+            }
+
+            // Build response rows
+            for (String cust : period1Map.keySet()) {
+                Decimal rev1 = period1Map.get(cust);
+                Decimal rev2 = period2Map.containsKey(cust) ? period2Map.get(cust) : 0;
+
+                if (rev2 < rev1) {
+                    DropOffWrapper row = new DropOffWrapper();
+                    row.customerName   = cust;
+                    row.period1Revenue = '$' + rev1.setScale(2).format();
+                    row.period2Revenue = '$' + rev2.setScale(2).format();
+                    row.dropAmount     = '$' + (rev1 - rev2).setScale(2).format();
+                    row.dropPercentage = (((rev1 - rev2) / rev1) * 100).setScale(1) + '%';
+                    res.dropOffRecords.add(row);
+                }
+            }
+
+            // Summary
+            res.summaryText = res.dropOffRecords.isEmpty()
+                ? 'No revenue drop-offs detected.'
+                : 'Found ' + res.dropOffRecords.size() + ' customers with revenue decline.';
+
+            results.add(res);
+        }
+
+        return results;
+    }
+}
