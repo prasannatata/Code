@@ -1,0 +1,211 @@
+Got it ✅ thanks for pasting your full `Customer_RevenueDropOffAction` code.
+
+Right now your Apex is returning a **string table** (`Response.result`) instead of a **structured list of objects**. That’s why Agentforce can only render it as text, not in a `lightning-datatable`.
+
+To make it behave like the **Product example**, we only need two key changes:
+
+---
+
+## 🔑 Changes Needed
+
+1. **Return a list of wrapper records instead of a single string.**
+
+   * Create an `@InvocableVariable` class (like your `DropOffRecord`) to represent each row.
+   * Expose that in your `Response`.
+
+2. **Update schema.json & renderer.json to point at the wrapper.**
+
+   * `"lightning:type": "@apexClassType/c__Customer_RevenueDropOffAction$DropOffRecord"`
+   * `renderer.json` should point to your LWC datatable component.
+
+---
+
+## ✅ Modified Apex
+
+```apex
+public with sharing class Customer_RevenueDropOffAction {
+    
+    public class Request {
+        @InvocableVariable(label='Period 1 Start Date (earlier period)')
+        public Date period1Start;
+        
+        @InvocableVariable(label='Period 1 End Date')
+        public Date period1End;
+        
+        @InvocableVariable(label='Period 2 Start Date (later period)')
+        public Date period2Start;
+        
+        @InvocableVariable(label='Period 2 End Date')
+        public Date period2End;
+        
+        @InvocableVariable(label='Number of Top Customers')
+        public Integer topN = 20;
+    }
+    
+    public class Response {
+        @InvocableVariable(label='Drop-Off Records')
+        public List<DropOffRecord> dropOffRecords;
+    }
+    
+    @InvocableMethod(label='Detect Revenue Drop-Off')
+    public static List<Response> run(List<Request> reqs) {
+        List<Response> results = new List<Response>();
+        
+        for (Request r : reqs) {
+            Response res = new Response();
+            res.dropOffRecords = new List<DropOffRecord>();
+            
+            // (same date logic as before) ...
+            Date period1Start = r.period1Start != null ? r.period1Start : Date.today().addMonths(-6);
+            Date period1End = r.period1End != null ? r.period1End : Date.today().addMonths(-3);
+            Date period2Start = r.period2Start != null ? r.period2Start : Date.today().addMonths(-3);
+            Date period2End = r.period2End != null ? r.period2End : Date.today();
+            
+            // Query Period 1
+            Map<String, Decimal> period1RevMap = new Map<String, Decimal>();
+            for (AggregateResult ar : [
+                SELECT CustomerName__c, SUM(Revenue__c) totalRev
+                FROM Realistic_OrderLine_Datacsv__dlm
+                WHERE OrderPODate__c >= :period1Start AND OrderPODate__c <= :period1End
+                GROUP BY CustomerName__c
+            ]) {
+                period1RevMap.put((String)ar.get('CustomerName__c'), (Decimal)ar.get('totalRev'));
+            }
+            
+            // Query Period 2
+            Map<String, Decimal> period2RevMap = new Map<String, Decimal>();
+            for (AggregateResult ar : [
+                SELECT CustomerName__c, SUM(Revenue__c) totalRev
+                FROM Realistic_OrderLine_Datacsv__dlm
+                WHERE OrderPODate__c >= :period2Start AND OrderPODate__c <= :period2End
+                GROUP BY CustomerName__c
+            ]) {
+                period2RevMap.put((String)ar.get('CustomerName__c'), (Decimal)ar.get('totalRev'));
+            }
+            
+            // Build Drop-Off Records
+            List<DropOffRecord> dropOffs = new List<DropOffRecord>();
+            for (String customer : period1RevMap.keySet()) {
+                Decimal rev1 = period1RevMap.get(customer);
+                Decimal rev2 = period2RevMap.containsKey(customer) ? period2RevMap.get(customer) : 0;
+                
+                if (rev2 < rev1) {
+                    DropOffRecord rec = new DropOffRecord();
+                    rec.customerName = customer;
+                    rec.period1Revenue = rev1;
+                    rec.period2Revenue = rev2;
+                    rec.dropAmount = rev1 - rev2;
+                    rec.dropPercent = ((rev1 - rev2) / rev1) * 100;
+                    dropOffs.add(rec);
+                }
+            }
+            
+            dropOffs.sort(); // sort by dropAmount
+            res.dropOffRecords = dropOffs.subList(0, Math.min(r.topN, dropOffs.size()));
+            results.add(res);
+        }
+        
+        return results;
+    }
+    
+    public class DropOffRecord implements Comparable {
+        @InvocableVariable public String customerName;
+        @InvocableVariable public Decimal period1Revenue;
+        @InvocableVariable public Decimal period2Revenue;
+        @InvocableVariable public Decimal dropAmount;
+        @InvocableVariable public Decimal dropPercent;
+        
+        public Integer compareTo(Object other) {
+            DropOffRecord o = (DropOffRecord) other;
+            if (dropAmount > o.dropAmount) return -1;
+            if (dropAmount < o.dropAmount) return 1;
+            return 0;
+        }
+    }
+}
+```
+
+---
+
+## ⚡ LWC
+
+Exactly like your product example → `dropOffDetails`.
+
+**dropOffDetails.html**
+
+```html
+<template>
+    <lightning-card title="Revenue Drop-Offs" icon-name="standard:account">
+        <lightning-datatable
+            data={records}
+            columns={columns}
+            key-field="customerName">
+        </lightning-datatable>
+    </lightning-card>
+</template>
+```
+
+**dropOffDetails.js**
+
+```javascript
+import { LightningElement, api } from 'lwc';
+
+export default class DropOffDetails extends LightningElement {
+    @api value; // Agentforce passes DropOffRecord[]
+
+    columns = [
+        { label: 'Customer', fieldName: 'customerName' },
+        { label: 'Period 1 Revenue', fieldName: 'period1Revenue', type: 'currency' },
+        { label: 'Period 2 Revenue', fieldName: 'period2Revenue', type: 'currency' },
+        { label: 'Drop Amount', fieldName: 'dropAmount', type: 'currency' },
+        { label: 'Drop %', fieldName: 'dropPercent', type: 'percent' }
+    ];
+
+    get records() {
+        return this.value || [];
+    }
+}
+```
+
+---
+
+## ⚡ LightningType (RevenueDropOffResponse)
+
+**schema.json**
+
+```json
+{
+  "title": "Revenue Drop-Off Response",
+  "description": "List of customers with revenue drop-off",
+  "lightning:type": "@apexClassType/c__Customer_RevenueDropOffAction$DropOffRecord"
+}
+```
+
+**renderer.json**
+
+```json
+{
+  "collection": {
+    "renderer": {
+      "componentOverrides": {
+        "$": {
+          "definition": "c/dropOffDetails"
+        }
+      }
+    }
+  }
+}
+```
+
+---
+
+## 🚀 Outcome
+
+* Apex now returns `DropOffRecord[]`.
+* Lightning Type maps directly to `DropOffRecord`.
+* Agentforce passes the data into your `dropOffDetails` LWC.
+* LWC renders it as a **data table** instead of plain text.
+
+---
+
+Do you want me to also refactor your **Response class** to *only* expose `dropOffRecords` (and remove the `result` string entirely), or should we **keep both** (so Agentforce can choose between a string summary and a datatable)?
