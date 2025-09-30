@@ -110,3 +110,53 @@ public with sharing class Customer_RevenueDropOffAction {
             Map<String, Decimal> period1RevMap = new Map<String, Decimal>();
             Map<String, Decimal> period2RevMap = new Map<String, Decimal>();
             
+            for (AggregateResult ar : period1Results) {
+                period1RevMap.put((String)ar.get('CustomerName__c'), (Decimal)ar.get('totalRev'));
+            }
+            for (AggregateResult ar : period2Results) {
+                period2RevMap.put((String)ar.get('CustomerName__c'), (Decimal)ar.get('totalRev'));
+            }
+            
+            // Detect drop-offs
+            List<DropOffRecord> dropOffs = new List<DropOffRecord>();
+            
+            for (String customer : period1RevMap.keySet()) {
+                Decimal rev1 = period1RevMap.get(customer);
+                Decimal rev2 = period2RevMap.containsKey(customer) ? period2RevMap.get(customer) : 0;
+                
+                if (rev2 < rev1) {
+                    DropOffRecord rec = new DropOffRecord();
+                    rec.customerName = customer;
+                    rec.period1Revenue = rev1;
+                    rec.period2Revenue = rev2;
+                    rec.dropAmount = rev1 - rev2;
+                    rec.dropPercent = ((rev1 - rev2) / rev1) * 100;
+                    dropOffs.add(rec);
+                }
+            }
+            
+            // Sort by drop amount
+            dropOffs.sort();
+            
+            // Trim to Top N
+            Integer displayCount = Math.min(r.topN, dropOffs.size());
+            if (displayCount > 0) {
+                List<DropOffRecord> topDropOffs = new List<DropOffRecord>();
+                for (Integer i = 0; i < displayCount; i++) {
+                    topDropOffs.add(dropOffs[i]);
+                }
+                res.dropOffRecords.addAll(topDropOffs);
+                res.result = 'Found ' + displayCount +
+                    ' customers with revenue decline between ' +
+                    period1Label + ' and ' + period2Label;
+            } else {
+                res.result = 'No revenue drop-offs detected between ' +
+                    period1Label + ' and ' + period2Label;
+            }
+            
+            results.add(res);
+        }
+        
+        return results;
+    }
+}
