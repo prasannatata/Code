@@ -1,0 +1,201 @@
+public with sharing class Order_GetDetailsAction {
+    
+    public class Request {
+        @InvocableVariable(required=true label='Order Reference Number')
+        public String orderRef;
+    }
+    
+    public class Response {
+        @InvocableVariable(label='Order Details')
+        public String result;
+    }
+    
+    @InvocableMethod(label='Get Order Details' description='Retrieve complete details for a specific order')
+    public static List<Response> run(List<Request> reqs) {
+        List<Response> results = new List<Response>();
+        
+        for (Request r : reqs) {
+            Response res = new Response();
+            
+            try {
+                List<Realistic_OrderLine_Datacsv__dlm> rows = [
+                    SELECT OrderRefNumber__c, CustomerName__c, CustomerID__c,
+                           ParentCustomerName__c, ParentCustomerID__c,
+                           OrderStatus__c, OrderCreateDate__c, OrderPODate__c,
+                           Vendor__c, Modality__c, OEM__c,
+                           PartNumber__c, PartDescription__c,
+                           Quantity__c, Revenue__c,
+                           Requestor__c, SalesRep__c
+                    FROM Realistic_OrderLine_Datacsv__dlm
+                    WHERE OrderRefNumber__c = :r.orderRef
+                    LIMIT 1
+                ];
+                
+                if (rows.isEmpty()) {
+                    res.result = '❌ No order found with reference: ' + r.orderRef;
+                } else {
+                    res.result = formatOrderCard(rows[0]);
+                }
+                
+            } catch (Exception e) {
+                res.result = '⚠️ Error while fetching order ' + r.orderRef + ': ' + e.getMessage();
+            }
+            
+            results.add(res);
+        }
+        
+        return results;
+    }
+    
+    // Format order details into a nice card layout
+    private static String formatOrderCard(Realistic_OrderLine_Datacsv__dlm order) {
+        String output = '';
+        
+        // Header
+        output += '📋 **Order Details**' + '\n';
+        output += '═══════════════════════════════════════' + '\n' + '\n';
+        
+        // Order Information
+        output += '🔹 **Order Reference:** ' + (order.OrderRefNumber__c != null ? order.OrderRefNumber__c : 'N/A') + '\n';
+        output += '🔹 **Status:** ' + (order.OrderStatus__c != null ? order.OrderStatus__c : 'N/A') + '\n';
+        output += '🔹 **Created Date:** ' + (order.OrderCreateDate__c != null ? order.OrderCreateDate__c.format() : 'N/A') + '\n';
+        output += '🔹 **PO Date:** ' + (order.OrderPODate__c != null ? order.OrderPODate__c.format() : 'N/A') + '\n' + '\n';
+        
+        // Customer Information
+        output += '👥 **Customer Information**' + '\n';
+        output += '───────────────────────────────────────' + '\n';
+        output += '   • **Customer:** ' + (order.CustomerName__c != null ? order.CustomerName__c : 'N/A') + '\n';
+        output += '   • **Customer ID:** ' + (order.CustomerID__c != null ? order.CustomerID__c : 'N/A') + '\n';
+        
+        if (order.ParentCustomerName__c != null) {
+            output += '   • **Parent Customer:** ' + order.ParentCustomerName__c + '\n';
+            if (order.ParentCustomerID__c != null) {
+                output += '   • **Parent Customer ID:** ' + order.ParentCustomerID__c + '\n';
+            }
+        }
+        output += '\n';
+        
+        // Product Information
+        output += '📦 **Product Information**' + '\n';
+        output += '───────────────────────────────────────' + '\n';
+        output += '   • **Vendor:** ' + (order.Vendor__c != null ? order.Vendor__c : 'N/A') + '\n';
+        output += '   • **OEM:** ' + (order.OEM__c != null ? order.OEM__c : 'N/A') + '\n';
+        output += '   • **Modality:** ' + (order.Modality__c != null ? order.Modality__c : 'N/A') + '\n';
+        output += '   • **Part Number:** ' + (order.PartNumber__c != null ? order.PartNumber__c : 'N/A') + '\n';
+        
+        if (order.PartDescription__c != null) {
+            output += '   • **Description:** ' + order.PartDescription__c + '\n';
+        }
+        
+        output += '   • **Quantity:** ' + (order.Quantity__c != null ? String.valueOf(order.Quantity__c.setScale(0)) : 'N/A') + '\n';
+        output += '   • **Revenue:** ' + (order.Revenue__c != null ? '$' + order.Revenue__c.setScale(2).format() : 'N/A') + '\n' + '\n';
+        
+        // People Information
+        output += '👤 **Team Information**' + '\n';
+        output += '───────────────────────────────────────' + '\n';
+        output += '   • **Requestor:** ' + (order.Requestor__c != null ? order.Requestor__c : 'N/A') + '\n';
+        output += '   • **Sales Rep:** ' + (order.SalesRep__c != null ? order.SalesRep__c : 'N/A') + '\n';
+        
+        return output;
+    }
+}
+
+// ============================================
+// ORDER DETAILS ACTION - TEST SCRIPT
+// Execute in Developer Console > Debug > Open Execute Anonymous Window
+// ============================================
+
+System.debug('========================================');
+System.debug('TESTING Order_GetDetailsAction');
+System.debug('========================================\n');
+
+// STEP 1: First, let's find a real order number from your data
+System.debug('STEP 1: Finding real order numbers...');
+System.debug('----------------------------------------');
+
+List<Realistic_OrderLine_Datacsv__dlm> sampleOrders = [
+    SELECT OrderRefNumber__c, CustomerName__c, OrderStatus__c, Revenue__c
+    FROM Realistic_OrderLine_Datacsv__dlm
+    LIMIT 5
+];
+
+if (sampleOrders.isEmpty()) {
+    System.debug('⚠️ No orders found in your org! Please import data first.');
+} else {
+    System.debug('Found ' + sampleOrders.size() + ' sample orders:');
+    for (Realistic_OrderLine_Datacsv__dlm o : sampleOrders) {
+        System.debug('  • ' + o.OrderRefNumber__c + ' - ' + o.CustomerName__c + ' - ' + o.OrderStatus__c);
+    }
+    System.debug('\n');
+    
+    // STEP 2: Test with the first order
+    System.debug('STEP 2: Testing with first order...');
+    System.debug('----------------------------------------');
+    String testOrderRef = sampleOrders[0].OrderRefNumber__c;
+    System.debug('Testing with Order: ' + testOrderRef);
+    System.debug('');
+    
+    Order_GetDetailsAction.Request req1 = new Order_GetDetailsAction.Request();
+    req1.orderRef = testOrderRef;
+    
+    List<Order_GetDetailsAction.Response> results1 = 
+        Order_GetDetailsAction.run(new List<Order_GetDetailsAction.Request>{ req1 });
+    
+    System.debug('RESULT:');
+    System.debug(results1[0].result);
+    System.debug('\n');
+    
+    // STEP 3: Test with non-existent order
+    System.debug('STEP 3: Testing with non-existent order...');
+    System.debug('----------------------------------------');
+    
+    Order_GetDetailsAction.Request req2 = new Order_GetDetailsAction.Request();
+    req2.orderRef = 'FAKE-ORDER-12345';
+    
+    List<Order_GetDetailsAction.Response> results2 = 
+        Order_GetDetailsAction.run(new List<Order_GetDetailsAction.Request>{ req2 });
+    
+    System.debug('RESULT:');
+    System.debug(results2[0].result);
+    System.debug('\n');
+    
+    // STEP 4: Display all available order numbers for demo
+    System.debug('STEP 4: Order numbers you can use in your demo:');
+    System.debug('----------------------------------------');
+    
+    List<Realistic_OrderLine_Datacsv__dlm> demoOrders = [
+        SELECT OrderRefNumber__c, CustomerName__c, OrderStatus__c, 
+               Vendor__c, Revenue__c
+        FROM Realistic_OrderLine_Datacsv__dlm
+        WHERE OrderStatus__c = 'Pending'
+        ORDER BY OrderCreateDate__c DESC
+        LIMIT 10
+    ];
+    
+    if (demoOrders.isEmpty()) {
+        System.debug('⚠️ No pending orders found. Showing any orders:');
+        demoOrders = [
+            SELECT OrderRefNumber__c, CustomerName__c, OrderStatus__c, 
+                   Vendor__c, Revenue__c
+            FROM Realistic_OrderLine_Datacsv__dlm
+            ORDER BY OrderCreateDate__c DESC
+            LIMIT 10
+        ];
+    }
+    
+    System.debug('\n📋 COPY THESE ORDER NUMBERS FOR YOUR DEMO:\n');
+    Integer count = 1;
+    for (Realistic_OrderLine_Datacsv__dlm o : demoOrders) {
+        System.debug(count + '. ' + o.OrderRefNumber__c + 
+                     ' | ' + o.CustomerName__c + 
+                     ' | ' + o.OrderStatus__c + 
+                     ' | ' + (o.Vendor__c != null ? o.Vendor__c : 'N/A') +
+                     ' | $' + (o.Revenue__c != null ? o.Revenue__c.setScale(2) : 0));
+        count++;
+    }
+}
+
+System.debug('\n========================================');
+System.debug('TEST COMPLETED');
+System.debug('Copy the order numbers above for your demo!');
+System.debug('========================================');
