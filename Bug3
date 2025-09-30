@@ -1,7 +1,3 @@
-// ============================================
-// ORDER COMPOSITE FILTERS ACTION - VERIFIED
-// ============================================
-
 public with sharing class Order_GetByCompositeFiltersAction {
     
     public class Request {
@@ -175,6 +171,28 @@ public with sharing class Order_GetByCompositeFiltersAction {
         return output;
     }
 }
+
+
+
+
+
+
+// Just get your demo values - nothing else
+List<AggregateResult> s = [SELECT OrderStatus__c x, COUNT(Id) c FROM Realistic_OrderLine_Datacsv__dlm GROUP BY OrderStatus__c LIMIT 3];
+System.debug('STATUSES:');
+for(AggregateResult a:s) System.debug(a.get('x'));
+
+List<AggregateResult> o = [SELECT OEM__c x, COUNT(Id) c FROM Realistic_OrderLine_Datacsv__dlm WHERE OEM__c!=null GROUP BY OEM__c LIMIT 3];
+System.debug('OEMS:');
+for(AggregateResult a:o) System.debug(a.get('x'));
+
+List<AggregateResult> c = [SELECT CustomerName__c x FROM Realistic_OrderLine_Datacsv__dlm WHERE CustomerName__c!=null GROUP BY CustomerName__c ORDER BY SUM(Revenue__c) DESC LIMIT 3];
+System.debug('CUSTOMERS:');
+for(AggregateResult a:c) System.debug(a.get('x'));
+
+List<Realistic_OrderLine_Datacsv__dlm> ord = [SELECT OrderRefNumber__c FROM Realistic_OrderLine_Datacsv__dlm LIMIT 3];
+System.debug('ORDERS:');
+for(Realistic_OrderLine_Datacsv__dlm r:ord) System.debug(r.OrderRefNumber__c);
 
 // ============================================
 // COMPLETE TEST SCRIPT FOR ALL 4 ACTIONS
