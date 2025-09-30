@@ -160,3 +160,34 @@ public with sharing class Customer_RevenueDropOffAction {
         return results;
     }
 }
+
+
+
+// Prepare request
+Customer_RevenueDropOffAction.Request req = new Customer_RevenueDropOffAction.Request();
+req.period1Start = Date.newInstance(2025, 1, 1);
+req.period1End   = Date.newInstance(2025, 3, 31);
+req.period2Start = Date.newInstance(2025, 4, 1);
+req.period2End   = Date.newInstance(2025, 6, 30);
+req.topN         = 5;
+
+// Call the invocable method
+List<Customer_RevenueDropOffAction.Request> reqList = new List<Customer_RevenueDropOffAction.Request>{ req };
+List<Customer_RevenueDropOffAction.Response> responses = Customer_RevenueDropOffAction.run(reqList);
+
+// Debug the output
+for (Customer_RevenueDropOffAction.Response res : responses) {
+    System.debug('=== RESULT: ' + res.result);
+    if (res.dropOffRecords != null) {
+        for (Customer_RevenueDropOffAction.DropOffRecord rec : res.dropOffRecords) {
+            System.debug(
+                'Customer=' + rec.customerName +
+                ' | Period1=' + rec.period1Revenue +
+                ' | Period2=' + rec.period2Revenue +
+                ' | Drop=' + rec.dropAmount +
+                ' | Percent=' + rec.dropPercent
+            );
+        }
+    }
+}
+
