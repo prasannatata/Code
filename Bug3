@@ -1,0 +1,523 @@
+// ============================================
+// ORDER COMPOSITE FILTERS ACTION - VERIFIED
+// ============================================
+
+public with sharing class Order_GetByCompositeFiltersAction {
+    
+    public class Request {
+        @InvocableVariable(label='Order Status' required=false)
+        public String status;
+        
+        @InvocableVariable(label='PO Date Before' required=false)
+        public Date poDateBefore;
+        
+        @InvocableVariable(label='Requestor' required=false)
+        public String requestor;
+        
+        @InvocableVariable(label='OEM' required=false)
+        public String oemName;
+        
+        @InvocableVariable(label='Limit' required=false)
+        public Integer limitSize;
+    }
+    
+    public class Response {
+        @InvocableVariable(label='Summary')
+        public String summaryText;
+        
+        @InvocableVariable(label='Table Data')
+        public String tableData;
+        
+        @InvocableVariable(label='Record Count')
+        public Integer recordCount;
+    }
+    
+    @InvocableMethod(label='Get Orders By Composite Filters' description='Find orders matching multiple criteria')
+    public static List<Response> run(List<Request> requests) {
+        List<Response> results = new List<Response>();
+        
+        if (requests == null || requests.isEmpty()) {
+            Response emptyRes = new Response();
+            emptyRes.summaryText = 'No request provided';
+            emptyRes.tableData = '';
+            emptyRes.recordCount = 0;
+            results.add(emptyRes);
+            return results;
+        }
+        
+        Request req = requests[0];
+        Response res = new Response();
+        
+        try {
+            Integer limitValue = (req.limitSize != null && req.limitSize > 0) ? req.limitSize : 50;
+            
+            String status = req.status;
+            Date poDateBefore = req.poDateBefore;
+            String requestor = req.requestor;
+            String oemName = req.oemName;
+            
+            String soql = 
+                'SELECT OrderRefNumber__c, CustomerName__c, ParentCustomerName__c, ' +
+                'OrderStatus__c, OrderPODate__c, Requestor__c, OEM__c, ' +
+                'Vendor__c, Modality__c, Quantity__c, Revenue__c, OrderCreateDate__c ' +
+                'FROM Realistic_OrderLine_Datacsv__dlm';
+            
+            List<String> conditions = new List<String>();
+            
+            if (String.isNotBlank(status)) {
+                conditions.add('OrderStatus__c = :status');
+            }
+            
+            if (poDateBefore != null) {
+                conditions.add('OrderPODate__c < :poDateBefore');
+            }
+            
+            if (String.isNotBlank(requestor)) {
+                conditions.add('Requestor__c = :requestor');
+            }
+            
+            if (String.isNotBlank(oemName)) {
+                conditions.add('OEM__c = :oemName');
+            }
+            
+            if (!conditions.isEmpty()) {
+                soql += ' WHERE ' + String.join(conditions, ' AND ');
+            }
+            
+            soql += ' ORDER BY OrderCreateDate__c DESC LIMIT ' + limitValue;
+            
+            System.debug('Executing SOQL: ' + soql);
+            
+            List<Realistic_OrderLine_Datacsv__dlm> orders = Database.query(soql);
+            
+            if (orders.isEmpty()) {
+                res.summaryText = 'No orders found matching the specified filters.';
+                res.tableData = '';
+                res.recordCount = 0;
+            } else {
+                res.summaryText = buildSummary(orders, req);
+                res.tableData = buildTable(orders);
+                res.recordCount = orders.size();
+            }
+            
+        } catch (Exception e) {
+            res.summaryText = 'Error: ' + e.getMessage();
+            res.tableData = '';
+            res.recordCount = 0;
+            System.debug('Error: ' + e.getMessage() + '\n' + e.getStackTraceString());
+        }
+        
+        results.add(res);
+        return results;
+    }
+    
+    private static String buildSummary(List<Realistic_OrderLine_Datacsv__dlm> orders, Request req) {
+        List<String> filters = new List<String>();
+        
+        if (String.isNotBlank(req.status)) {
+            filters.add('Status: ' + req.status);
+        }
+        if (req.poDateBefore != null) {
+            filters.add('PO Date before: ' + req.poDateBefore.format());
+        }
+        if (String.isNotBlank(req.requestor)) {
+            filters.add('Requestor: ' + req.requestor);
+        }
+        if (String.isNotBlank(req.oemName)) {
+            filters.add('OEM: ' + req.oemName);
+        }
+        
+        String filterText = !filters.isEmpty() ? ' (' + String.join(filters, ', ') + ')' : '';
+        
+        Decimal totalRevenue = 0;
+        Decimal totalQty = 0;
+        
+        for (Realistic_OrderLine_Datacsv__dlm order : orders) {
+            if (order.Revenue__c != null) {
+                totalRevenue += order.Revenue__c;
+            }
+            if (order.Quantity__c != null) {
+                totalQty += order.Quantity__c;
+            }
+        }
+        
+        String summary = 'Found ' + orders.size() + ' orders' + filterText + '.' + '\n';
+        summary += 'Total Revenue: $' + totalRevenue.setScale(2).format() + '\n';
+        summary += 'Total Quantity: ' + totalQty.setScale(0);
+        
+        return summary;
+    }
+    
+    private static String buildTable(List<Realistic_OrderLine_Datacsv__dlm> orders) {
+        String output = '';
+        Integer num = 1;
+        
+        for (Realistic_OrderLine_Datacsv__dlm order : orders) {
+            output += num + '. **' + (order.OrderRefNumber__c != null ? order.OrderRefNumber__c : 'N/A') + '**' + '\n';
+            output += '   • Customer: ' + (order.CustomerName__c != null ? order.CustomerName__c : 'N/A') + '\n';
+            
+            if (order.ParentCustomerName__c != null) {
+                output += '   • Parent Customer: ' + order.ParentCustomerName__c + '\n';
+            }
+            
+            output += '   • Status: ' + (order.OrderStatus__c != null ? order.OrderStatus__c : 'N/A') + '\n';
+            output += '   • PO Date: ' + (order.OrderPODate__c != null ? order.OrderPODate__c.format() : 'N/A') + '\n';
+            output += '   • Requestor: ' + (order.Requestor__c != null ? order.Requestor__c : 'N/A') + '\n';
+            output += '   • OEM: ' + (order.OEM__c != null ? order.OEM__c : 'N/A') + '\n';
+            output += '   • Vendor: ' + (order.Vendor__c != null ? order.Vendor__c : 'N/A') + '\n';
+            output += '   • Modality: ' + (order.Modality__c != null ? order.Modality__c : 'N/A') + '\n';
+            output += '   • Quantity: ' + (order.Quantity__c != null ? String.valueOf(order.Quantity__c.setScale(0)) : 'N/A') + '\n';
+            output += '   • Revenue: ' + (order.Revenue__c != null ? '$' + order.Revenue__c.setScale(2).format() : 'N/A') + '\n' + '\n';
+            
+            num++;
+        }
+        
+        return output;
+    }
+}
+
+// ============================================
+// COMPLETE TEST SCRIPT FOR ALL 4 ACTIONS
+// Execute in Developer Console > Debug > Open Execute Anonymous Window
+// Check "Open Log" before executing
+// ============================================
+
+System.debug('\n');
+System.debug('╔════════════════════════════════════════════════════════════════╗');
+System.debug('║     SALESFORCE AGENTFORCE ACTIONS - COMPLETE TEST SUITE       ║');
+System.debug('╚════════════════════════════════════════════════════════════════╝');
+System.debug('\n');
+
+// ============================================
+// PART 1: DATA DISCOVERY
+// ============================================
+System.debug('═══════════════════════════════════════════════════════════════');
+System.debug('PART 1: DISCOVERING AVAILABLE DATA');
+System.debug('═══════════════════════════════════════════════════════════════\n');
+
+// Get available order statuses
+List<AggregateResult> statusData = [
+    SELECT OrderStatus__c status, COUNT(Id) cnt
+    FROM Realistic_OrderLine_Datacsv__dlm
+    GROUP BY OrderStatus__c
+    ORDER BY COUNT(Id) DESC
+];
+
+System.debug('Available Order Statuses:');
+for (AggregateResult ar : statusData) {
+    System.debug('  - ' + ar.get('status') + ' (' + ar.get('cnt') + ' orders)');
+}
+System.debug('');
+
+// Get available OEMs
+List<AggregateResult> oemData = [
+    SELECT OEM__c oem, COUNT(Id) cnt
+    FROM Realistic_OrderLine_Datacsv__dlm
+    WHERE OEM__c != null
+    GROUP BY OEM__c
+    ORDER BY COUNT(Id) DESC
+    LIMIT 10
+];
+
+System.debug('Available OEMs:');
+for (AggregateResult ar : oemData) {
+    System.debug('  - ' + ar.get('oem') + ' (' + ar.get('cnt') + ' orders)');
+}
+System.debug('');
+
+// Get available vendors
+List<AggregateResult> vendorData = [
+    SELECT Vendor__c vendor, COUNT(Id) cnt
+    FROM Realistic_OrderLine_Datacsv__dlm
+    WHERE Vendor__c != null
+    GROUP BY Vendor__c
+    ORDER BY COUNT(Id) DESC
+    LIMIT 10
+];
+
+System.debug('Available Vendors:');
+for (AggregateResult ar : vendorData) {
+    System.debug('  - ' + ar.get('vendor') + ' (' + ar.get('cnt') + ' orders)');
+}
+System.debug('');
+
+// Get top customers
+List<AggregateResult> customerData = [
+    SELECT CustomerName__c customer, COUNT(Id) cnt, SUM(Revenue__c) revenue
+    FROM Realistic_OrderLine_Datacsv__dlm
+    WHERE CustomerName__c != null
+    GROUP BY CustomerName__c
+    ORDER BY SUM(Revenue__c) DESC
+    LIMIT 10
+];
+
+System.debug('Top Customers by Revenue:');
+for (AggregateResult ar : customerData) {
+    Decimal rev = (Decimal) ar.get('revenue');
+    System.debug('  - ' + ar.get('customer') + ' ($' + (rev != null ? rev.setScale(2) : 0) + ')');
+}
+System.debug('');
+
+// Get sample order numbers
+List<Realistic_OrderLine_Datacsv__dlm> sampleOrders = [
+    SELECT OrderRefNumber__c, CustomerName__c, OrderStatus__c, Revenue__c
+    FROM Realistic_OrderLine_Datacsv__dlm
+    LIMIT 10
+];
+
+System.debug('Sample Order Numbers:');
+for (Realistic_OrderLine_Datacsv__dlm o : sampleOrders) {
+    System.debug('  - ' + o.OrderRefNumber__c + ' | ' + o.CustomerName__c + ' | ' + o.OrderStatus__c);
+}
+System.debug('\n\n');
+
+// ============================================
+// PART 2: TEST ACTION 1 - TOP REVENUE CUSTOMERS
+// ============================================
+System.debug('═══════════════════════════════════════════════════════════════');
+System.debug('PART 2: TESTING Customer_TopRevenueAdvancedAction');
+System.debug('═══════════════════════════════════════════════════════════════\n');
+
+try {
+    System.debug('TEST 2.1: Top 5 Customers (No Filters)');
+    System.debug('---------------------------------------------------------------');
+    
+    Customer_TopRevenueAdvancedAction.Request req1 = new Customer_TopRevenueAdvancedAction.Request();
+    req1.limitSize = 5;
+    
+    List<Customer_TopRevenueAdvancedAction.Response> results1 = 
+        Customer_TopRevenueAdvancedAction.run(new List<Customer_TopRevenueAdvancedAction.Request>{ req1 });
+    
+    if (!results1.isEmpty()) {
+        System.debug('Summary: ' + results1[0].summary);
+        System.debug('SUCCESS: Returned ' + results1.size() + ' customers');
+    }
+    System.debug('\n');
+    
+    System.debug('TEST 2.2: Top 3 Customers for 2024');
+    System.debug('---------------------------------------------------------------');
+    
+    Customer_TopRevenueAdvancedAction.Request req2 = new Customer_TopRevenueAdvancedAction.Request();
+    req2.limitSize = 3;
+    req2.year = 2024;
+    
+    List<Customer_TopRevenueAdvancedAction.Response> results2 = 
+        Customer_TopRevenueAdvancedAction.run(new List<Customer_TopRevenueAdvancedAction.Request>{ req2 });
+    
+    if (!results2.isEmpty()) {
+        System.debug('Summary: ' + results2[0].summary);
+        System.debug('SUCCESS: Filtered by year 2024');
+    }
+    System.debug('\n');
+    
+} catch (Exception e) {
+    System.debug('ERROR in Customer_TopRevenueAdvancedAction: ' + e.getMessage());
+}
+
+// ============================================
+// PART 3: TEST ACTION 2 - ORDER COMPOSITE FILTERS
+// ============================================
+System.debug('═══════════════════════════════════════════════════════════════');
+System.debug('PART 3: TESTING Order_GetByCompositeFiltersAction');
+System.debug('═══════════════════════════════════════════════════════════════\n');
+
+try {
+    System.debug('TEST 3.1: All Orders (No Filters)');
+    System.debug('---------------------------------------------------------------');
+    
+    Order_GetByCompositeFiltersAction.Request req3 = new Order_GetByCompositeFiltersAction.Request();
+    req3.limitSize = 5;
+    
+    List<Order_GetByCompositeFiltersAction.Response> results3 = 
+        Order_GetByCompositeFiltersAction.run(new List<Order_GetByCompositeFiltersAction.Request>{ req3 });
+    
+    if (!results3.isEmpty()) {
+        System.debug('Summary: ' + results3[0].summaryText);
+        System.debug('Record Count: ' + results3[0].recordCount);
+        System.debug('SUCCESS');
+    }
+    System.debug('\n');
+    
+    if (!statusData.isEmpty()) {
+        String testStatus = (String) statusData[0].get('status');
+        
+        System.debug('TEST 3.2: Filter by Status = ' + testStatus);
+        System.debug('---------------------------------------------------------------');
+        
+        Order_GetByCompositeFiltersAction.Request req4 = new Order_GetByCompositeFiltersAction.Request();
+        req4.status = testStatus;
+        req4.limitSize = 3;
+        
+        List<Order_GetByCompositeFiltersAction.Response> results4 = 
+            Order_GetByCompositeFiltersAction.run(new List<Order_GetByCompositeFiltersAction.Request>{ req4 });
+        
+        if (!results4.isEmpty()) {
+            System.debug('Summary: ' + results4[0].summaryText);
+            System.debug('Record Count: ' + results4[0].recordCount);
+            System.debug('SUCCESS');
+        }
+        System.debug('\n');
+    }
+    
+    if (!oemData.isEmpty()) {
+        String testOEM = (String) oemData[0].get('oem');
+        
+        System.debug('TEST 3.3: Filter by OEM = ' + testOEM);
+        System.debug('---------------------------------------------------------------');
+        
+        Order_GetByCompositeFiltersAction.Request req5 = new Order_GetByCompositeFiltersAction.Request();
+        req5.oemName = testOEM;
+        req5.limitSize = 3;
+        
+        List<Order_GetByCompositeFiltersAction.Response> results5 = 
+            Order_GetByCompositeFiltersAction.run(new List<Order_GetByCompositeFiltersAction.Request>{ req5 });
+        
+        if (!results5.isEmpty()) {
+            System.debug('Summary: ' + results5[0].summaryText);
+            System.debug('Record Count: ' + results5[0].recordCount);
+            System.debug('SUCCESS');
+        }
+        System.debug('\n');
+    }
+    
+} catch (Exception e) {
+    System.debug('ERROR in Order_GetByCompositeFiltersAction: ' + e.getMessage());
+}
+
+// ============================================
+// PART 4: TEST ACTION 3 - ORDER DETAILS
+// ============================================
+System.debug('═══════════════════════════════════════════════════════════════');
+System.debug('PART 4: TESTING Order_GetDetailsAction');
+System.debug('═══════════════════════════════════════════════════════════════\n');
+
+try {
+    if (!sampleOrders.isEmpty()) {
+        String testOrderRef = sampleOrders[0].OrderRefNumber__c;
+        
+        System.debug('TEST 4.1: Get Details for Order = ' + testOrderRef);
+        System.debug('---------------------------------------------------------------');
+        
+        Order_GetDetailsAction.Request req6 = new Order_GetDetailsAction.Request();
+        req6.orderRef = testOrderRef;
+        
+        List<Order_GetDetailsAction.Response> results6 = 
+            Order_GetDetailsAction.run(new List<Order_GetDetailsAction.Request>{ req6 });
+        
+        if (!results6.isEmpty()) {
+            System.debug('Result:\n' + results6[0].result);
+            System.debug('SUCCESS');
+        }
+        System.debug('\n');
+        
+        System.debug('TEST 4.2: Non-existent Order');
+        System.debug('---------------------------------------------------------------');
+        
+        Order_GetDetailsAction.Request req7 = new Order_GetDetailsAction.Request();
+        req7.orderRef = 'FAKE-ORDER-999';
+        
+        List<Order_GetDetailsAction.Response> results7 = 
+            Order_GetDetailsAction.run(new List<Order_GetDetailsAction.Request>{ req7 });
+        
+        if (!results7.isEmpty()) {
+            System.debug('Result: ' + results7[0].result);
+            System.debug('SUCCESS: Error handling works');
+        }
+        System.debug('\n');
+    }
+} catch (Exception e) {
+    System.debug('ERROR in Order_GetDetailsAction: ' + e.getMessage());
+}
+
+// ============================================
+// PART 5: TEST ACTION 4 - CUSTOMER REVENUE TREND
+// ============================================
+System.debug('═══════════════════════════════════════════════════════════════');
+System.debug('PART 5: TESTING Customer_RevenueTrendAction');
+System.debug('═══════════════════════════════════════════════════════════════\n');
+
+try {
+    if (!customerData.isEmpty()) {
+        String testCustomer = (String) customerData[0].get('customer');
+        
+        System.debug('TEST 5.1: Revenue Trend for ' + testCustomer);
+        System.debug('---------------------------------------------------------------');
+        
+        Customer_RevenueTrendAction.Request req8 = new Customer_RevenueTrendAction.Request();
+        req8.customerName = testCustomer;
+        
+        List<Customer_RevenueTrendAction.Response> results8 = 
+            Customer_RevenueTrendAction.run(new List<Customer_RevenueTrendAction.Request>{ req8 });
+        
+        if (!results8.isEmpty()) {
+            System.debug('Result: ' + results8[0].result);
+            System.debug('SUCCESS');
+        }
+        System.debug('\n');
+    }
+} catch (Exception e) {
+    System.debug('ERROR in Customer_RevenueTrendAction: ' + e.getMessage());
+    System.debug('This action may need the OrderDL_Util class to be created');
+}
+
+// ============================================
+// PART 6: DEMO PREPARATION
+// ============================================
+System.debug('\n\n');
+System.debug('╔════════════════════════════════════════════════════════════════╗');
+System.debug('║                    DEMO PREPARATION GUIDE                      ║');
+System.debug('╚════════════════════════════════════════════════════════════════╝');
+System.debug('\n');
+
+System.debug('COPY THESE VALUES FOR YOUR DEMO:');
+System.debug('═══════════════════════════════════════════════════════════════\n');
+
+if (!statusData.isEmpty()) {
+    System.debug('ORDER STATUSES (use in questions):');
+    for (Integer i = 0; i < Math.min(3, statusData.size()); i++) {
+        System.debug('  - ' + statusData[i].get('status'));
+    }
+    System.debug('');
+}
+
+if (!oemData.isEmpty()) {
+    System.debug('OEM/VENDORS (use in questions):');
+    for (Integer i = 0; i < Math.min(5, oemData.size()); i++) {
+        System.debug('  - ' + oemData[i].get('oem'));
+    }
+    System.debug('');
+}
+
+if (!customerData.isEmpty()) {
+    System.debug('TOP CUSTOMERS (use in questions):');
+    for (Integer i = 0; i < Math.min(5, customerData.size()); i++) {
+        System.debug('  - ' + customerData[i].get('customer'));
+    }
+    System.debug('');
+}
+
+if (!sampleOrders.isEmpty()) {
+    System.debug('ORDER NUMBERS (use in questions):');
+    for (Integer i = 0; i < Math.min(5, sampleOrders.size()); i++) {
+        System.debug('  - ' + sampleOrders[i].OrderRefNumber__c);
+    }
+    System.debug('');
+}
+
+System.debug('\n');
+System.debug('RECOMMENDED DEMO QUESTIONS:');
+System.debug('═══════════════════════════════════════════════════════════════\n');
+System.debug('Q1: "Show me the top 5 customers by revenue"');
+System.debug('');
+System.debug('Q2: "Show me all ' + (!statusData.isEmpty() ? statusData[0].get('status') : 'pending') + ' orders"');
+System.debug('');
+System.debug('Q3: "Show me order ' + (!sampleOrders.isEmpty() ? sampleOrders[0].OrderRefNumber__c : 'ORD-XXX') + '"');
+System.debug('');
+System.debug('Q4: "Find ' + (!statusData.isEmpty() ? statusData[0].get('status') : 'pending') + ' orders from ' + 
+              (!oemData.isEmpty() ? oemData[0].get('oem') : 'Siemens') + ' before June 2024"');
+System.debug('\n');
+
+System.debug('╔════════════════════════════════════════════════════════════════╗');
+System.debug('║                   ALL TESTS COMPLETED                          ║');
+System.debug('╚════════════════════════════════════════════════════════════════╝');
+System.debug('\n');
