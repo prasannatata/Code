@@ -1,0 +1,102 @@
+Got it 👍 — right now your Apex is still pushing a **single big text blob** into `res.result`. That’s why the agent keeps echoing raw strings instead of giving you the polished, conversational table you want.
+
+If you want the **agent to automatically re-render into a Markdown table (with summary, insights, follow-ups)**, you should not flatten the SOQL results into a text table in Apex. Instead, return a **structured DTO list** (rows of customer, orders, revenue). Then your Topic instructions can say: “Always render structured records as markdown tables + conversational summary.”
+
+---
+
+## ✅ Refactored Apex (Structured Output DTO)
+
+```apex
+public with sharing class Customer_TopRevenueAction {
+
+    public class Request {
+        @InvocableVariable(required=false)
+        public Integer limitSize;
+    }
+
+    public class Response {
+        @InvocableVariable(label='Customer')
+        public String customer;
+
+        @InvocableVariable(label='Orders')
+        public Integer orders;
+
+        @InvocableVariable(label='Total Revenue')
+        public Decimal totalRevenue;
+    }
+
+    @InvocableMethod(label='Top Revenue Customers' description='List top customers by revenue')
+    public static List<Response> run(List<Request> reqs) {
+        Integer limitValue = 10;
+        if (reqs != null && !reqs.isEmpty() && reqs[0].limitSize != null && reqs[0].limitSize > 0) {
+            limitValue = reqs[0].limitSize;
+        }
+
+        List<Response> results = new List<Response>();
+
+        for (AggregateResult ar : [
+            SELECT CustomerName__c custName,
+                   COUNT(Id) orderCount,
+                   SUM(Revenue__c) sumRevenue
+            FROM Realistic_OrderLine_Datacsv__dlm
+            GROUP BY CustomerName__c
+            ORDER BY SUM(Revenue__c) DESC
+            LIMIT :limitValue
+        ]) {
+            Response r = new Response();
+            r.customer = (String) ar.get('custName');
+            r.orders = (Integer) ar.get('orderCount');
+            r.totalRevenue = (Decimal) ar.get('sumRevenue');
+            results.add(r);
+        }
+
+        return results;
+    }
+}
+```
+
+---
+
+## 🔑 Why this is better
+
+* Instead of sending `"Customer | Orders | Total Revenue..."` text → you send **structured records** (`customer`, `orders`, `totalRevenue`).
+* Your Topic instructions can now say:
+
+```
+Always take the structured records (Customer, Orders, Revenue) 
+and display them as a markdown table with conversational summary, 
+insights, and follow-ups. Never echo raw JSON.
+```
+
+---
+
+## 🎯 Demo Example (Agent Output)
+
+**You ask:**
+“Which 10 accounts had the highest revenue in Q2 2025?”
+
+**Agent responds (using your instructions):**
+
+📊 Here are the top 10 accounts by revenue in Q2 2025. Mass General leads the list, while Houston Methodist is at the bottom.
+
+| Customer         | Orders | Total Revenue |
+| ---------------- | ------ | ------------- |
+| Mass General     | 1      | $4,491.00     |
+| Stanford Health  | 1      | $3,517.00     |
+| Cleveland Clinic | 1      | $3,251.00     |
+| …                | …      | …             |
+
+🔑 **Key Insights:**
+
+* Mass General outperformed by ~25% compared to Stanford.
+* Johns Hopkins and Houston Methodist contribute less than $1,000 each.
+
+👉 **Next actions:**
+
+* Compare with Q1 2025?
+* Drill into Stanford Health by modality?
+* Create follow-up tasks for the top 3 accounts?
+
+---
+
+Would you like me to **refactor the other Apex classes** (like `RevenueTrend` and `ByDateRange`) into this same **structured DTO pattern**, so your entire demo stays interactive and polished?
