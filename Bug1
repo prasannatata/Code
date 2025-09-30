@@ -26,7 +26,7 @@ public with sharing class Customer_TopRevenueAdvancedAction {
 
         List<String> filters = new List<String>();
 
-        // Handle Year + Quarter with date ranges
+        // Handle Year + Quarter
         if (req.year != null) {
             Date startOfYear = Date.newInstance(req.year, 1, 1);
             Date endOfYear   = Date.newInstance(req.year, 12, 31);
@@ -36,13 +36,13 @@ public with sharing class Customer_TopRevenueAdvancedAction {
                 Integer endMonth   = startMonth + 2;
 
                 Date startOfQuarter = Date.newInstance(req.year, startMonth, 1);
-                Date endOfQuarter   = Date.newInstance(req.year, endMonth, startOfQuarter.daysInMonth());
+                Date endOfQuarter   = Date.newInstance(req.year, endMonth, Date.daysInMonth(req.year, endMonth));
 
-                filters.add('OrderCreateDate__c >= ' + startOfQuarter.formatGmt('yyyy-MM-dd') +
-                            ' AND OrderCreateDate__c <= ' + endOfQuarter.formatGmt('yyyy-MM-dd'));
+                filters.add('OrderCreateDate__c >= ' + startOfQuarter.format() +
+                            ' AND OrderCreateDate__c <= ' + endOfQuarter.format());
             } else {
-                filters.add('OrderCreateDate__c >= ' + startOfYear.formatGmt('yyyy-MM-dd') +
-                            ' AND OrderCreateDate__c <= ' + endOfYear.formatGmt('yyyy-MM-dd'));
+                filters.add('OrderCreateDate__c >= ' + startOfYear.format() +
+                            ' AND OrderCreateDate__c <= ' + endOfYear.format());
             }
         }
 
@@ -62,24 +62,37 @@ public with sharing class Customer_TopRevenueAdvancedAction {
 
         baseQuery += 'GROUP BY CustomerName__c ORDER BY SUM(Revenue__c) DESC LIMIT ' + limitValue;
 
-        System.debug(' Final SOQL: ' + baseQuery);
+        System.debug('Final SOQL: ' + baseQuery);
 
         List<AggregateResult> rows = Database.query(baseQuery);
         List<Response> results = new List<Response>();
+
+        if (rows.isEmpty()) {
+            Response r = new Response();
+            r.customerName = 'No Results';
+            r.orderCount = 0;
+            r.totalRevenue = 0;
+            r.summary = '⚠️ No matching data found for the given filters.';
+            results.add(r);
+            return results;
+        }
 
         for (AggregateResult ar : rows) {
             Response r = new Response();
             r.customerName = (String) ar.get('custName');
             r.orderCount   = (Integer) ar.get('orderCount');
             r.totalRevenue = (Decimal) ar.get('totalRevenue');
-            r.summary = '📊 ' + r.customerName + ' generated $' + r.totalRevenue.setScale(2) +
+
+            // Format revenue with commas + $
+            String formattedRevenue = '$' + String.valueOf(r.totalRevenue.setScale(2)).replaceAll('\\B(?=(\\d{3})+(?!\\d))', ',');
+
+            r.summary = '📊 ' + r.customerName + ' generated ' + formattedRevenue +
                         ' from ' + r.orderCount + ' orders.';
             results.add(r);
         }
         return results;
     }
 }
-
 Customer_TopRevenueAdvancedAction.Request req = new Customer_TopRevenueAdvancedAction.Request();
 req.limitSize = 5;
 req.year = 2025;
