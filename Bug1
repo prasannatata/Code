@@ -14,7 +14,7 @@ public with sharing class Customer_TopRevenueAdvancedAction {
         @InvocableVariable public Integer orderCount;
         @InvocableVariable public Decimal totalRevenue;
         @InvocableVariable public String summary;
-        @InvocableVariable public String markdownTable;  // NEW: Markdown table output
+        @InvocableVariable public String markdownTable;
     }
     
     @InvocableMethod(label='Top Revenue Customers')
@@ -79,8 +79,8 @@ public with sharing class Customer_TopRevenueAdvancedAction {
         List<Response> results = new List<Response>();
         
         // Build markdown table header
-        String markdownTableOutput = '| Rank | Customer Name | Total Revenue | Order Count |\n';
-        markdownTableOutput += '|------|---------------|---------------|-------------|\n';
+        String markdownTableOutput = '| Rank | Customer Name | Total Revenue | Order Count |' + '\n';
+        markdownTableOutput += '|------|---------------|---------------|-------------|' + '\n';
         
         Integer rank = 1;
         Decimal grandTotal = 0;
@@ -104,7 +104,7 @@ public with sharing class Customer_TopRevenueAdvancedAction {
             
             // Add to markdown table
             markdownTableOutput += '| ' + rank + ' | ' + r.customerName + ' | $' + 
-                                   r.totalRevenue.setScale(2) + ' | ' + r.orderCount + ' |\n';
+                                   r.totalRevenue.setScale(2) + ' | ' + r.orderCount + ' |' + '\n';
             
             // Track totals
             grandTotal += r.totalRevenue;
@@ -122,13 +122,13 @@ public with sharing class Customer_TopRevenueAdvancedAction {
         } else {
             // Add totals row
             markdownTableOutput += '| **TOTAL** | **' + results.size() + ' Customers** | **$' + 
-                                   grandTotal.setScale(2) + '** | **' + totalOrders + '** |\n';
+                                   grandTotal.setScale(2) + '** | **' + totalOrders + '** |' + '\n';
             
             // Add markdown table to first response (since it's a summary of all)
             results[0].markdownTable = markdownTableOutput;
             
             // Update first response summary with overview
-            results[0].summary = '📊 **Top ' + results.size() + ' Revenue Customers**\n\n' + 
+            results[0].summary = '📊 **Top ' + results.size() + ' Revenue Customers**' + '\n' + '\n' + 
                                 markdownTableOutput + '\n' +
                                 '💰 Grand Total: $' + grandTotal.setScale(2) + 
                                 ' across ' + totalOrders + ' orders';
@@ -139,7 +139,7 @@ public with sharing class Customer_TopRevenueAdvancedAction {
 }
 
 // ============================================
-// ANONYMOUS APEX TEST SCRIPT
+// ANONYMOUS APEX TEST SCRIPT - UPDATED
 // Execute this in Developer Console > Debug > Open Execute Anonymous Window
 // ============================================
 
@@ -159,102 +159,7 @@ List<Customer_TopRevenueAdvancedAction.Response> results1 =
 for (Customer_TopRevenueAdvancedAction.Response res : results1) {
     System.debug('Customer: ' + res.customerName);
     System.debug('Order Count: ' + res.orderCount);
-    System.debug('Total Revenue: 
-System.debug('\n');
-
-// TEST 2: Year Filter - 2024
-System.debug('TEST 2: Top 3 Customers for Year 2024');
-System.debug('----------------------------------------');
-Customer_TopRevenueAdvancedAction.Request req2 = new Customer_TopRevenueAdvancedAction.Request();
-req2.limitSize = 3;
-req2.year = 2024;
-
-List<Customer_TopRevenueAdvancedAction.Response> results2 = 
-    Customer_TopRevenueAdvancedAction.run(new List<Customer_TopRevenueAdvancedAction.Request>{ req2 });
-
-for (Customer_TopRevenueAdvancedAction.Response res : results2) {
-    System.debug(res.summary);
-}
-System.debug('\n');
-
-// TEST 3: Year + Quarter Filter - Q2 2024
-System.debug('TEST 3: Top 3 Customers for Q2 2024');
-System.debug('----------------------------------------');
-Customer_TopRevenueAdvancedAction.Request req3 = new Customer_TopRevenueAdvancedAction.Request();
-req3.limitSize = 3;
-req3.year = 2024;
-req3.quarter = 2;
-
-List<Customer_TopRevenueAdvancedAction.Response> results3 = 
-    Customer_TopRevenueAdvancedAction.run(new List<Customer_TopRevenueAdvancedAction.Request>{ req3 });
-
-for (Customer_TopRevenueAdvancedAction.Response res : results3) {
-    System.debug(res.summary);
-}
-System.debug('\n');
-
-// TEST 4: With Vendor Filter
-System.debug('TEST 4: Top 3 Customers for Specific Vendor');
-System.debug('----------------------------------------');
-// IMPORTANT: Replace 'YourVendorName' with an actual vendor from your data
-Customer_TopRevenueAdvancedAction.Request req4 = new Customer_TopRevenueAdvancedAction.Request();
-req4.limitSize = 3;
-req4.vendor = 'YourVendorName'; // UPDATE THIS
-
-List<Customer_TopRevenueAdvancedAction.Response> results4 = 
-    Customer_TopRevenueAdvancedAction.run(new List<Customer_TopRevenueAdvancedAction.Request>{ req4 });
-
-for (Customer_TopRevenueAdvancedAction.Response res : results4) {
-    System.debug(res.summary);
-}
-System.debug('\n');
-
-// TEST 5: Multiple Filters - Year + Modality + Status
-System.debug('TEST 5: Top 3 Customers for 2024 + Filters');
-System.debug('----------------------------------------');
-// IMPORTANT: Replace with actual values from your data
-Customer_TopRevenueAdvancedAction.Request req5 = new Customer_TopRevenueAdvancedAction.Request();
-req5.limitSize = 3;
-req5.year = 2024;
-req5.modality = 'YourModalityValue'; // UPDATE THIS
-req5.orderStatus = 'Completed'; // UPDATE THIS
-
-List<Customer_TopRevenueAdvancedAction.Response> results5 = 
-    Customer_TopRevenueAdvancedAction.run(new List<Customer_TopRevenueAdvancedAction.Request>{ req5 });
-
-for (Customer_TopRevenueAdvancedAction.Response res : results5) {
-    System.debug(res.summary);
-}
-System.debug('\n');
-
-// TEST 6: Edge Case - No Results Expected
-System.debug('TEST 6: Query with No Expected Results');
-System.debug('----------------------------------------');
-Customer_TopRevenueAdvancedAction.Request req6 = new Customer_TopRevenueAdvancedAction.Request();
-req6.limitSize = 5;
-req6.year = 1999; // Unlikely to have data
-
-List<Customer_TopRevenueAdvancedAction.Response> results6 = 
-    Customer_TopRevenueAdvancedAction.run(new List<Customer_TopRevenueAdvancedAction.Request>{ req6 });
-
-for (Customer_TopRevenueAdvancedAction.Response res : results6) {
-    System.debug(res.summary);
-}
-System.debug('\n');
-
-// TEST 7: Null Request (Should use defaults)
-System.debug('TEST 7: Null Request (Default Behavior)');
-System.debug('----------------------------------------');
-List<Customer_TopRevenueAdvancedAction.Response> results7 = 
-    Customer_TopRevenueAdvancedAction.run(null);
-
-for (Customer_TopRevenueAdvancedAction.Response res : results7) {
-    System.debug(res.summary);
-}
-
-System.debug('\n========================================');
-System.debug('ALL TESTS COMPLETED');
-System.debug('========================================'); + res.totalRevenue);
+    System.debug('Total Revenue: $' + res.totalRevenue);
     System.debug('Summary: ' + res.summary);
     if (String.isNotBlank(res.markdownTable)) {
         System.debug('\nMARKDOWN TABLE:\n' + res.markdownTable);
@@ -273,8 +178,9 @@ req2.year = 2024;
 List<Customer_TopRevenueAdvancedAction.Response> results2 = 
     Customer_TopRevenueAdvancedAction.run(new List<Customer_TopRevenueAdvancedAction.Request>{ req2 });
 
-for (Customer_TopRevenueAdvancedAction.Response res : results2) {
-    System.debug(res.summary);
+System.debug('Summary:\n' + results2[0].summary);
+if (String.isNotBlank(results2[0].markdownTable)) {
+    System.debug('\nTable:\n' + results2[0].markdownTable);
 }
 System.debug('\n');
 
@@ -289,9 +195,7 @@ req3.quarter = 2;
 List<Customer_TopRevenueAdvancedAction.Response> results3 = 
     Customer_TopRevenueAdvancedAction.run(new List<Customer_TopRevenueAdvancedAction.Request>{ req3 });
 
-for (Customer_TopRevenueAdvancedAction.Response res : results3) {
-    System.debug(res.summary);
-}
+System.debug('Summary:\n' + results3[0].summary);
 System.debug('\n');
 
 // TEST 4: With Vendor Filter
@@ -305,9 +209,7 @@ req4.vendor = 'YourVendorName'; // UPDATE THIS
 List<Customer_TopRevenueAdvancedAction.Response> results4 = 
     Customer_TopRevenueAdvancedAction.run(new List<Customer_TopRevenueAdvancedAction.Request>{ req4 });
 
-for (Customer_TopRevenueAdvancedAction.Response res : results4) {
-    System.debug(res.summary);
-}
+System.debug('Summary:\n' + results4[0].summary);
 System.debug('\n');
 
 // TEST 5: Multiple Filters - Year + Modality + Status
@@ -323,9 +225,7 @@ req5.orderStatus = 'Completed'; // UPDATE THIS
 List<Customer_TopRevenueAdvancedAction.Response> results5 = 
     Customer_TopRevenueAdvancedAction.run(new List<Customer_TopRevenueAdvancedAction.Request>{ req5 });
 
-for (Customer_TopRevenueAdvancedAction.Response res : results5) {
-    System.debug(res.summary);
-}
+System.debug('Summary:\n' + results5[0].summary);
 System.debug('\n');
 
 // TEST 6: Edge Case - No Results Expected
@@ -338,9 +238,7 @@ req6.year = 1999; // Unlikely to have data
 List<Customer_TopRevenueAdvancedAction.Response> results6 = 
     Customer_TopRevenueAdvancedAction.run(new List<Customer_TopRevenueAdvancedAction.Request>{ req6 });
 
-for (Customer_TopRevenueAdvancedAction.Response res : results6) {
-    System.debug(res.summary);
-}
+System.debug('Summary:\n' + results6[0].summary);
 System.debug('\n');
 
 // TEST 7: Null Request (Should use defaults)
@@ -349,10 +247,12 @@ System.debug('----------------------------------------');
 List<Customer_TopRevenueAdvancedAction.Response> results7 = 
     Customer_TopRevenueAdvancedAction.run(null);
 
-for (Customer_TopRevenueAdvancedAction.Response res : results7) {
-    System.debug(res.summary);
+System.debug('Summary:\n' + results7[0].summary);
+if (String.isNotBlank(results7[0].markdownTable)) {
+    System.debug('\nTable:\n' + results7[0].markdownTable);
 }
 
 System.debug('\n========================================');
 System.debug('ALL TESTS COMPLETED');
+System.debug('Check the logs above for markdown table output');
 System.debug('========================================');
