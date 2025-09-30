@@ -289,3 +289,13 @@ sf project deploy start --manifest manifest/package.xml
 }
 sf project deploy start --source-dir force-app/main/default/lightningTypes/RevenueDropOffResponse
 
+
+{
+  "type": "apexClassType",
+  "apiName": "DropOffWrapper",
+  "title": "Revenue Drop-Off Response",
+  "description": "List of customers with revenue decline"
+}
+sf project deploy start --source-dir force-app/main/default/lightningTypes/RevenueDropOffResponse
+
+
