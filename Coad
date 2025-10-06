@@ -1,0 +1,35 @@
+import { LightningElement, wire, track } from 'lwc';
+import detectDropOff from '@salesforce/apex/Customer_RevenueDropOffAction.run';
+
+export default class RevenueDropOffTable extends LightningElement {
+    @track records;
+    @track error;
+
+    columns = [
+        { label: 'Customer Name', fieldName: 'customerName' },
+        { label: 'Period 1 Revenue', fieldName: 'period1Revenue', type: 'currency' },
+        { label: 'Period 2 Revenue', fieldName: 'period2Revenue', type: 'currency' },
+        { label: 'Drop Amount', fieldName: 'dropAmount', type: 'currency' },
+        { label: 'Drop Percentage', fieldName: 'dropPercent', type: 'percent', typeAttributes: { step: '0.01' } }
+    ];
+
+    @wire(detectDropOff, { 
+        reqs: [{
+            period1Start: null,
+            period1End: null,
+            period2Start: null,
+            period2End: null,
+            topN: 10
+        }] 
+    })
+    wiredDropOff({ data, error }) {
+        if (data) {
+            this.records = data[0]?.dropOffRecords || [];
+            this.error = undefined;
+        } else if (error) {
+            this.error = error;
+            this.records = undefined;
+            console.error('Error loading revenue drop-off data', error);
+        }
+    }
+}
