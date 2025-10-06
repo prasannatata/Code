@@ -33,3 +33,8 @@ export default class RevenueDropOffTable extends LightningElement {
         }
     }
 }
++++++++++++++++
+
+
+sfdx force:source:deploy -p force-app/main/default/lwc/revenueDropOffTable
+sfdx force:source:deploy -p force-app/main/default/classes/Customer_RevenueDropOffAction.cls
