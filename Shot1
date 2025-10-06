@@ -1,0 +1,307 @@
+<template>
+    <!-- Loading Spinner -->
+    <template if:true={loading}>
+        <lightning-card title="Loading">
+            <div class="slds-p-around_medium">
+                <lightning-spinner alternative-text="Loading data"></lightning-spinner>
+            </div>
+        </lightning-card>
+    </template>
+
+    <!-- Data Table -->
+    <template if:false={loading}>
+        <template if:true={error}>
+            <lightning-card title="Error">
+                <div class="slds-p-around_medium">
+                    <p>{error}</p>
+                </div>
+            </lightning-card>
+        </template>
+
+        <template if:true={records}>
+            <lightning-card title="Revenue Drop-Off Results">
+                <lightning-datatable
+                    key-field="customerName"
+                    data={records}
+                    columns={columns}
+                    hide-checkbox-column>
+                </lightning-datatable>
+            </lightning-card>
+        </template>
+
+        <template if:false={records}>
+            <lightning-card title="Revenue Drop-Off Results">
+                <div class="slds-p-around_medium">
+                    <p>No data available.</p>
+                </div>
+            </lightning-card>
+        </template>
+    </template>
+</template>
+
+========
+import { LightningElement, track } from 'lwc';
+import detectDropOff from '@salesforce/apex/Customer_RevenueDropOffAction.run';
+import { ShowToastEvent } from 'lightning/platformShowToastEvent';
+
+export default class RevenueDropOffTable extends LightningElement {
+    @track loading = true;
+    @track error;
+    @track records;
+
+    columns = [
+        { label: 'Customer Name', fieldName: 'customerName' },
+        { label: 'Period 1 Revenue', fieldName: 'period1Revenue', type: 'currency' },
+        { label: 'Period 2 Revenue', fieldName: 'period2Revenue', type: 'currency' },
+        { label: 'Drop Amount', fieldName: 'dropAmount', type: 'currency' },
+        { label: 'Drop %', fieldName: 'dropPercent', type: 'percent', typeAttributes: { step: '0.01' } }
+    ];
+
+    connectedCallback() {
+        this.loadData();
+    }
+
+    loadData() {
+        this.loading = true;
+        detectDropOff({
+            reqs: [{
+                period1Start: null,
+                period1End: null,
+                period2Start: null,
+                period2End: null,
+                topN: 10
+            }]
+        })
+            .then((result) => {
+                if (result && result.length > 0) {
+                    this.records = result[0].dropOffRecords;
+                } else {
+                    this.records = null;
+                }
+            })
+            .catch((error) => {
+                console.error('Error fetching drop-off data', error);
+                this.error = error?.body?.message || 'Error loading revenue drop-off data.';
+                this.dispatchEvent(
+                    new ShowToastEvent({
+                        title: 'Error',
+                        message: this.error,
+                        variant: 'error'
+                    })
+                );
+            })
+            .finally(() => {
+                this.loading = false;
+            });
+    }
+}
+
+============
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>64.0</apiVersion>
+    <isExposed>true</isExposed>
+    <masterLabel>Revenue Drop-Off Table</masterLabel>
+    <targets>
+        <target>lightning__AppPage</target>
+        <target>lightning__HomePage</target>
+        <target>lightning__RecordPage</target>
+        <target>lightningCommunity__Default</target>
+        <target>lightningCommunity__Page</target>
+    </targets>
+</LightningComponentBundle>
+
+==============
+sfdx force:source:deploy -p force-app/main/default/classes/Customer_RevenueDropOffAction.cls
+sfdx force:source:deploy -p force-app/main/default/lwc/revenueDropOffTable
+
+======
+/**
+ * Customer_RevenueDropOffAction.cls
+ * ---------------------------------
+ * Detects top customers with revenue drop-offs between two periods.
+ * Designed for use in Flows, LWC, or Agentforce actions.
+ */
+public with sharing class Customer_RevenueDropOffAction {
+
+    // ====== REQUEST DTO ======
+    public class Request {
+        @InvocableVariable(label='Period 1 Start Date (earlier period)')
+        public Date period1Start;
+
+        @InvocableVariable(label='Period 1 End Date')
+        public Date period1End;
+
+        @InvocableVariable(label='Period 2 Start Date (later period)')
+        public Date period2Start;
+
+        @InvocableVariable(label='Period 2 End Date')
+        public Date period2End;
+
+        @InvocableVariable(label='Number of Top Customers')
+        public Integer topN = 20;
+    }
+
+    // ====== RESPONSE DTO ======
+    public class Response {
+        @InvocableVariable(label='Summary Result')
+        public String result;
+
+        @InvocableVariable(label='Revenue Drop-Off Records')
+        public List<DropOffRecord> dropOffRecords;
+    }
+
+    // ====== RECORD DTO ======
+    public class DropOffRecord implements Comparable {
+        @InvocableVariable(label='Customer Name')
+        public String customerName;
+
+        @InvocableVariable(label='Period 1 Revenue')
+        public Decimal period1Revenue;
+
+        @InvocableVariable(label='Period 2 Revenue')
+        public Decimal period2Revenue;
+
+        @InvocableVariable(label='Drop Amount')
+        public Decimal dropAmount;
+
+        @InvocableVariable(label='Drop Percentage')
+        public Decimal dropPercent;
+
+        // Sorting (descending by drop amount)
+        public Integer compareTo(Object other) {
+            DropOffRecord otherRec = (DropOffRecord) other;
+            if (this.dropAmount > otherRec.dropAmount) return -1;
+            if (this.dropAmount < otherRec.dropAmount) return 1;
+            return 0;
+        }
+    }
+
+    // ====== MAIN INVOCABLE METHOD ======
+    @InvocableMethod(label='Detect Revenue Drop-Off')
+    public static List<Response> run(List<Request> reqs) {
+        List<Response> allResponses = new List<Response>();
+
+        for (Request req : reqs) {
+            Response res = new Response();
+            res.dropOffRecords = new List<DropOffRecord>();
+
+            // ====== Handle Missing Dates (default to previous and current quarter) ======
+            Date period1Start;
+            Date period1End;
+            Date period2Start;
+            Date period2End;
+            String period1Label;
+            String period2Label;
+
+            if (req.period1Start == null || req.period2Start == null) {
+                Date today = Date.today();
+                Integer currentYear = today.year();
+                Integer currentQuarter = ((today.month() - 1) / 3) + 1;
+
+                Integer prevQuarter = currentQuarter - 1;
+                Integer prevYear = currentYear;
+
+                if (prevQuarter == 0) {
+                    prevQuarter = 4;
+                    prevYear--;
+                }
+
+                // Calculate default quarter boundaries
+                period1Start = Date.newInstance(prevYear, ((prevQuarter - 1) * 3) + 1, 1);
+                period1End = period1Start.addMonths(3).addDays(-1);
+                period2Start = Date.newInstance(currentYear, ((currentQuarter - 1) * 3) + 1, 1);
+                period2End = period2Start.addMonths(3).addDays(-1);
+
+                period1Label = 'Q' + prevQuarter + ' ' + prevYear;
+                period2Label = 'Q' + currentQuarter + ' ' + currentYear;
+            } else {
+                // Use provided dates
+                period1Start = req.period1Start;
+                period1End = req.period1End;
+                period2Start = req.period2Start;
+                period2End = req.period2End;
+
+                period1Label = period1Start.format() + ' to ' + period1End.format();
+                period2Label = period2Start.format() + ' to ' + period2End.format();
+            }
+
+            // ====== Query Period 1 Revenues ======
+            List<AggregateResult> p1Agg = [
+                SELECT CustomerName__c, SUM(Revenue__c) totalRevenue
+                FROM Realistic_OrderLine_Datacsv__dlm
+                WHERE OrderPODate__c >= :period1Start
+                      AND OrderPODate__c <= :period1End
+                GROUP BY CustomerName__c
+            ];
+
+            // ====== Query Period 2 Revenues ======
+            List<AggregateResult> p2Agg = [
+                SELECT CustomerName__c, SUM(Revenue__c) totalRevenue
+                FROM Realistic_OrderLine_Datacsv__dlm
+                WHERE OrderPODate__c >= :period2Start
+                      AND OrderPODate__c <= :period2End
+                GROUP BY CustomerName__c
+            ];
+
+            // ====== Convert to Maps for Easy Lookup ======
+            Map<String, Decimal> period1Map = new Map<String, Decimal>();
+            Map<String, Decimal> period2Map = new Map<String, Decimal>();
+
+            for (AggregateResult a : p1Agg) {
+                period1Map.put((String) a.get('CustomerName__c'), (Decimal) a.get('totalRevenue'));
+            }
+            for (AggregateResult a : p2Agg) {
+                period2Map.put((String) a.get('CustomerName__c'), (Decimal) a.get('totalRevenue'));
+            }
+
+            // ====== Detect Drop-Offs ======
+            List<DropOffRecord> dropList = new List<DropOffRecord>();
+
+            for (String customer : period1Map.keySet()) {
+                Decimal rev1 = period1Map.get(customer);
+                Decimal rev2 = period2Map.containsKey(customer) ? period2Map.get(customer) : 0;
+
+                if (rev1 > rev2) {
+                    DropOffRecord rec = new DropOffRecord();
+                    rec.customerName = customer;
+                    rec.period1Revenue = rev1;
+                    rec.period2Revenue = rev2;
+                    rec.dropAmount = rev1 - rev2;
+                    rec.dropPercent = (rev1 > 0) ? ((rev1 - rev2) / rev1) * 100 : 0;
+                    dropList.add(rec);
+                }
+            }
+
+            // ====== Sort and Limit Results ======
+            dropList.sort();
+
+            Integer displayCount = Math.min(
+                (req.topN != null && req.topN > 0) ? req.topN : 20,
+                dropList.size()
+            );
+
+            List<DropOffRecord> finalList = (displayCount > 0)
+                ? dropList.subList(0, displayCount)
+                : new List<DropOffRecord>();
+
+            // ====== Prepare Response ======
+            res.dropOffRecords = finalList;
+            if (finalList.isEmpty()) {
+                res.result = 'No revenue drop-offs detected between ' +
+                    period1Label + ' and ' + period2Label + '.';
+            } else {
+                res.result = 'Found ' + displayCount + 
+                    ' customers with revenue decline between ' +
+                    period1Label + ' and ' + period2Label + '.';
+            }
+
+            allResponses.add(res);
+        }
+
+        return allResponses;
+    }
+}
+
+
+
