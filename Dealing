@@ -1,0 +1,162 @@
+public with sharing class Customer_TopRevenueAdvancedAction {
+
+    // -----------------------------------
+    // 📊 Child structure for the table
+    // -----------------------------------
+    public class CustomerRow {
+        @InvocableVariable(label='Rank') public Integer rank;
+        @InvocableVariable(label='Customer Name') public String customerName;
+        @InvocableVariable(label='Total Revenue') public Decimal totalRevenue;
+        @InvocableVariable(label='Order Count') public Integer orderCount;
+    }
+
+    // -----------------------------------
+    // 🧩 Input parameters
+    // -----------------------------------
+    public class Request {
+        @InvocableVariable(label='Limit Size') public Integer limitSize;
+        @InvocableVariable(label='Year') public Integer year;
+        @InvocableVariable(label='Vendor') public String vendor;
+        @InvocableVariable(label='Modality') public String modality;
+        @InvocableVariable(label='Order Status') public String orderStatus;
+    }
+
+    // -----------------------------------
+    // 🧾 Output wrapper
+    // -----------------------------------
+    public class Response {
+        @InvocableVariable(label='Top Customers Table') public List<CustomerRow> tableRows;
+        @InvocableVariable(label='Grand Total Revenue') public Decimal grandTotal;
+        @InvocableVariable(label='Total Orders') public Integer totalOrders;
+        @InvocableVariable(label='Summary') public String summary;
+    }
+
+    // -----------------------------------
+    // ⚡ Invocable Method for Flows & Agentforce
+    // -----------------------------------
+    @InvocableMethod(label='Top Revenue Customers (Structured)')
+    public static List<Response> runAction(List<Request> reqs) {
+
+        Request req = (reqs != null && !reqs.isEmpty()) ? reqs[0] : new Request();
+        Integer limitValue = (req.limitSize != null && req.limitSize > 0) ? req.limitSize : 5;
+
+        String baseQuery =
+            'SELECT CustomerName__c custName, COUNT(Id) orderCount, SUM(Revenue__c) totalRevenue ' +
+            'FROM Realistic_OrderLine_Datacsv__dlm ';
+
+        List<String> filters = new List<String>();
+
+        // 📅 Date Filters
+        if (req.year != null) {
+            Date startDate = Date.newInstance(req.year, 1, 1);
+            Date endDate   = Date.newInstance(req.year, 12, 31);
+            String startDateStr = startDate.format();
+            String endDateStr   = endDate.format();
+
+            filters.add('OrderCreateDate__c >= ' + startDateStr +
+                        ' AND OrderCreateDate__c <= ' + endDateStr);
+        }
+
+        // 🔎 Optional Filters
+        if (String.isNotBlank(req.vendor))
+            filters.add('Vendor__c = \'' + String.escapeSingleQuotes(req.vendor) + '\'');
+        if (String.isNotBlank(req.modality))
+            filters.add('Modality__c = \'' + String.escapeSingleQuotes(req.modality) + '\'');
+        if (String.isNotBlank(req.orderStatus))
+            filters.add('OrderStatus__c = \'' + String.escapeSingleQuotes(req.orderStatus) + '\'');
+
+        if (!filters.isEmpty()) {
+            baseQuery += 'WHERE ' + String.join(filters, ' AND ') + ' ';
+        }
+
+        baseQuery += 'GROUP BY CustomerName__c ORDER BY SUM(Revenue__c) DESC LIMIT ' + limitValue;
+        System.debug('📊 Final Query: ' + baseQuery);
+
+        // 🧠 Execute
+        List<AggregateResult> rows;
+        Response res = new Response();
+
+        try {
+            rows = Database.query(baseQuery);
+        } catch (Exception e) {
+            res.summary = '❌ Error executing query: ' + e.getMessage();
+            return new List<Response>{res};
+        }
+
+        if (rows.isEmpty()) {
+            res.summary = '⚠️ No customers found for the given filters.';
+            return new List<Response>{res};
+        }
+
+        // 🏁 Build Output
+        List<CustomerRow> tableRows = new List<CustomerRow>();
+        Integer rank = 1;
+        Decimal grandTotal = 0;
+        Integer totalOrders = 0;
+
+        for (AggregateResult ar : rows) {
+            CustomerRow row = new CustomerRow();
+            row.rank = rank++;
+            row.customerName = (String) ar.get('custName');
+            row.totalRevenue = (Decimal) ar.get('totalRevenue');
+            row.orderCount = ((Decimal) ar.get('orderCount')).intValue();
+            grandTotal += row.totalRevenue;
+            totalOrders += row.orderCount;
+            tableRows.add(row);
+        }
+
+        res.tableRows = tableRows;
+        res.grandTotal = grandTotal;
+        res.totalOrders = totalOrders;
+        res.summary = '📈 Top ' + tableRows.size() +
+                      ' customers generated $' + grandTotal.setScale(2) +
+                      ' from ' + totalOrders + ' orders.';
+
+        return new List<Response>{res};
+    }
+}
+
+
+
+// ========================================================
+// 🧠 TESTING Customer_TopRevenueAdvancedAction
+// ========================================================
+
+System.debug('========== 🧩 TEST START ==========');
+
+// 1️⃣ Create a test input request
+Customer_TopRevenueAdvancedAction.Request req = new Customer_TopRevenueAdvancedAction.Request();
+req.limitSize = 5;       // Top N customers
+req.year = 2025;         // Filter by year
+req.vendor = null;       // Optional: e.g. 'GE Healthcare'
+req.modality = null;     // Optional: e.g. 'MRI'
+req.orderStatus = null;  // Optional: e.g. 'Completed'
+
+// 2️⃣ Call the Apex Invocable Method directly
+List<Customer_TopRevenueAdvancedAction.Request> reqList = new List<Customer_TopRevenueAdvancedAction.Request>{req};
+List<Customer_TopRevenueAdvancedAction.Response> results = Customer_TopRevenueAdvancedAction.runAction(reqList);
+
+// 3️⃣ Print outputs in readable form
+if (!results.isEmpty()) {
+    Customer_TopRevenueAdvancedAction.Response res = results[0];
+    System.debug('========== 🧾 RAW OBJECT OUTPUT ==========');
+    System.debug(res);
+
+    System.debug('========== 📊 FORMATTED OUTPUT ==========');
+    System.debug('📈 ' + res.summary);
+    System.debug('💰 Grand Total Revenue: ' + res.grandTotal);
+    System.debug('📦 Total Orders: ' + res.totalOrders);
+
+    if (res.tableRows != null && !res.tableRows.isEmpty()) {
+        for (Customer_TopRevenueAdvancedAction.CustomerRow row : res.tableRows) {
+            System.debug('🏅 Rank ' + row.rank + ' | Customer: ' + row.customerName +
+                         ' | Revenue: ' + row.totalRevenue + ' | Orders: ' + row.orderCount);
+        }
+    } else {
+        System.debug('⚠️ No rows found.');
+    }
+} else {
+    System.debug('❌ No response returned from runAction.');
+}
+
+System.debug('========== ✅ TEST COMPLETE ==========');
